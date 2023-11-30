@@ -4,7 +4,7 @@
 Starting from the vertex and arrival time, back-tracing by the parent nodes
 
 # Arguments
-- `parents::Dict{T,T}`: dictionary keep track of parent relation. (node => from_node)
+- `parents::Dict{T,T}`: dictionary keep track of parent relation. (node => from-node)
 - `node::T`: node to start backtracing
 """
 function backtrace_path(parents::Dict{T,T}, node::T)::Vector{T} where {T}
@@ -27,7 +27,7 @@ Returns the path as a vector of vertices, return nothing if fail to find a solut
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from_v, to_v)
+- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `agent`: agent index
 - `source::V`: starting vertex of agent
 - `target::V`: target vertex for the agent to go to
@@ -100,7 +100,7 @@ Returns the path as a vector of time-expanded vertices, return nothing if fail t
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from_v, to_v)
+- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `agent`: agent index
 - `source::V`: starting vertex of agent
 - `target::V`: target vertex for the agent to go to
@@ -169,6 +169,67 @@ function temporal_astar(
     return nothing
 end
 
+#=
+Temporal
+=#
+function build_path_astar(parents::Dict, arr, tarr;)
+    path = Int[]
+    (t, v) = (tarr, arr)
+    pushfirst!(path, v)
+    while haskey(parents, (t, v))
+        (t, v) = parents[t, v]
+        pushfirst!(path, v)
+    end
+    return t, path
+end
+
+function temporal_astar(
+    g::AbstractGraph{V}, w::DynamicDimensionArray{W}; dep, arr, tdep, tmax, heuristic
+) where {V,W}
+
+    # Init storage
+    T = Int
+    candidates = BinaryHeap(Base.By(last), [(tdep, dep) => heuristic(dep)])
+    parents = Dict{Tuple{T,V},Tuple{T,V}}()
+    dists = Dict{Tuple{T,V},W}((tdep, dep) => zero(W))
+
+    # Main loop
+    while !isempty(candidates)
+        (t, u), u_fscore = pop!(candidates)
+        Δ_u = dists[t, u]
+        if u == arr
+            return build_path_astar(parents, arr, t)
+            # if t == tmax + 1
+            #     timed_path = remove_arrival_vertex(timed_path)
+            # end
+            # break
+        elseif t == tmax
+            v = arr
+            Δ_v = get(dists, (t + 1, v), nothing)
+            Δ_v_through_u = Δ_u + heuristic(u)
+            if isnothing(Δ_v) || (Δ_v_through_u < Δ_v)
+                parents[t + 1, v] = (t, u)
+                dists[t + 1, v] = Δ_v_through_u
+                h_v = Δ_v_through_u + heuristic(v)
+                push!(candidates, (t + 1, v) => h_v)
+            end
+        elseif t < tmax
+            for v in outneighbors(g, u)
+                isnothing(heuristic(v)) && continue
+                Δ_v = get(dists, (t + 1, v), nothing)
+                Δ_v_through_u = Δ_u + w[u, v]
+                if isnothing(Δ_v) || (Δ_v_through_u < Δ_v)
+                    parents[t + 1, v] = (t, u)
+                    dists[t + 1, v] = Δ_v_through_u
+                    h_v = Δ_v_through_u + heuristic(v)
+                    push!(candidates, (t + 1, v) => h_v)
+                end
+            end
+        end
+    end
+    return nothing
+end
+
 """
     shortest_paths(
         network, edge_costs, sources, targets, departure_times;
@@ -178,7 +239,7 @@ Apply A* for all the agents in parallel. Returns the paths and costs of individu
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from_v, to_v)
+- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `sources::Vector{V}`: starting vertices of agents
 - `targets::Vector{V}`: target vertices for the agents to go to
 - `departure_times`: time when agents start traveling
