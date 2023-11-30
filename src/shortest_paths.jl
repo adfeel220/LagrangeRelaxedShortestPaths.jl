@@ -18,6 +18,70 @@ function backtrace_path(parents::Dict{T,T}, node::T)::Vector{T} where {T}
 end
 
 """
+    dijkstra(
+        network, edge_costs, agent, source, target; backwards
+    )
+Run Dijkstra's algorithm and return the total costs and parents of the entire network.
+Parent node of 
+
+# Arguments
+- `network::AbstractGraph{V}`: network for the agent to travel on
+- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `agent`: agent index
+- `source::V`: starting vertex of agent
+where `V` is the type of vertex and `C` is the type of cost
+
+# Keyword arguments
+- `backwards::Bool`: Whether to apply Dijkstra in a backward fashion (on reversed network),
+by default `false`
+"""
+function dijkstra(
+    network::AbstractGraph{V},
+    edge_costs::DynamicDimensionArray{C},
+    agent,
+    source::V;
+    backwards::Bool=false,
+) where {V,C}
+    # customize direction of exploration
+    get_neighbors = backwards ? inneighbors : outneighbors
+
+    # set of candidate nodes to be explored, use heap to retrieve minimum cost
+    # node in constant time
+    open_set = BinaryHeap(Base.By(last), [Pair(source, zero(C))])
+
+    # parents store the traversing relationship between the time-expanded vertices
+    parents = zeros(V, nv(network))
+    # scores store the cost from source to a specific node
+    scores = fill(typemax(C), nv(network))
+
+    # Initialize score for starting point
+    scores[source] = zero(C)
+
+    while !isempty(open_set)
+        # Retrieve the smallest cost node
+        vertex, score = pop!(open_set)
+
+        # Explore the neighbors of current vertex
+        for v in get_neighbors(network, vertex)
+            travel_cost =
+                backwards ? edge_costs[agent, v, vertex] : edge_costs[agent, vertex, v]
+            tentative_score = score + travel_cost
+            neighbor_score = scores[v]
+
+            # Record a neighbor as a good node to move forward if we find a lower
+            # cost path compared to the previous exploration on this node
+            if tentative_score < neighbor_score
+                parents[v] = vertex
+                scores[v] = tentative_score
+                push!(open_set, v => tentative_score)
+            end
+        end
+    end
+
+    return scores, parents
+end
+
+"""
     astar(
         network, edge_costs, agent, source, target;
         heuristic, max_iter
@@ -37,7 +101,6 @@ where `V` is the type of vertex and `C` is the type of cost
 - `heuristic::Function`: given a vertex as input, returns the estimated cost from this vertex
 to target. This estimation has to always underestimate the cost to guarantee optimal result.
 i.e. h(n) ≤ d(n) always true for all n. By default always returns 0
-- `max_iter::UInt`: maximum iteration of individual A*, by default `typemax(UInt)`
 """
 function astar(
     network::AbstractGraph{V},
@@ -45,8 +108,7 @@ function astar(
     agent,
     source::V,
     target::V;
-    heuristic=n -> zero(C),
-    max_iter::UInt=typemax(UInt),
+    heuristic::Function=n -> zero(C),
 ) where {V,C}
     # set of candidate nodes to be explored, use heap to retrieve minimum cost
     # node in constant time
@@ -57,11 +119,7 @@ function astar(
     # g_score store the cost from source to a specific node
     g_score = Dict{V,C}(source => zero(C))
 
-    for itr in zero(UInt):max_iter
-        if isempty(open_set)
-            break
-        end
-
+    while !isempty(open_set)
         # Retrieve the smallest cost node
         vertex, _ = pop!(open_set)
 
@@ -73,12 +131,11 @@ function astar(
         # Explore the neighbors of current vertex
         for v in outneighbors(network, vertex)
             tentative_g_score = g_score[vertex] + edge_costs[agent, vertex, v]
-            neighbor_g_score = get(g_score, v, nothing)
+            neighbor_g_score::C = get(g_score, v, typemax(C))
 
             # Record a neighbor as a good node to move forward if
-            # 1. it's not explroed yet (score is `nothing`)
-            # 2. we find a lower cost path compared to the previous exploration on this node
-            if isnothing(neighbor_g_score) || tentative_g_score < neighbor_g_score
+            # we find a lower cost path compared to the previous exploration on this node
+            if tentative_g_score < neighbor_g_score
                 parents[v] = vertex
                 g_score[v] = tentative_g_score
                 f_score = tentative_g_score + heuristic(v)
@@ -119,10 +176,24 @@ function temporal_astar(
     agent,
     source::V,
     target::V,
-    departure_time::T;
-    heuristic::Function=n -> zero(C),
+    departure_time::T=0;
+    heuristic::Union{Symbol,Function}=:dijkstra,
     max_iter::UInt=typemax(UInt),
 ) where {V,T,C}
+    # Resolve heuristic
+    if isa(heuristic, Symbol)
+        if heuristic == :dijkstra
+            dijkstra_scores, _ = dijkstra(
+                network, edge_costs, agent, target; backwards=true
+            )
+            heuristic = (v -> dijkstra_scores[v])
+        elseif heuristic == :lazy
+            heuristic = (v -> zero(C))
+        else
+            error("Unrecognized heuristic symbol $heuristic")
+        end
+    end
+
     # set of candidate nodes to be explored, use heap to retrieve minimum cost
     # node in constant time
     open_set = BinaryHeap(
@@ -152,12 +223,11 @@ function temporal_astar(
         for v in outneighbors(network, vertex)
             tentative_g_score =
                 g_score[t, vertex] + edge_costs[t + one(T), agent, vertex, v]
-            neighbor_g_score = get(g_score, (t + one(T), v), nothing)
+            neighbor_g_score::C = get(g_score, (t + one(T), v), typemax(C))
 
             # Record a neighbor as a good node to move forward if
-            # 1. it's not explroed yet (score is `nothing`)
-            # 2. we find a lower cost path compared to the previous exploration on this node
-            if isnothing(neighbor_g_score) || tentative_g_score < neighbor_g_score
+            # we find a lower cost path compared to the previous exploration on this node
+            if tentative_g_score < neighbor_g_score
                 parents[t + one(T), v] = node
                 g_score[t + one(T), v] = tentative_g_score
                 f_score = tentative_g_score + heuristic(v)
@@ -166,67 +236,6 @@ function temporal_astar(
         end
     end
 
-    return nothing
-end
-
-#=
-Temporal
-=#
-function build_path_astar(parents::Dict, arr, tarr;)
-    path = Int[]
-    (t, v) = (tarr, arr)
-    pushfirst!(path, v)
-    while haskey(parents, (t, v))
-        (t, v) = parents[t, v]
-        pushfirst!(path, v)
-    end
-    return t, path
-end
-
-function temporal_astar(
-    g::AbstractGraph{V}, w::DynamicDimensionArray{W}; dep, arr, tdep, tmax, heuristic
-) where {V,W}
-
-    # Init storage
-    T = Int
-    candidates = BinaryHeap(Base.By(last), [(tdep, dep) => heuristic(dep)])
-    parents = Dict{Tuple{T,V},Tuple{T,V}}()
-    dists = Dict{Tuple{T,V},W}((tdep, dep) => zero(W))
-
-    # Main loop
-    while !isempty(candidates)
-        (t, u), u_fscore = pop!(candidates)
-        Δ_u = dists[t, u]
-        if u == arr
-            return build_path_astar(parents, arr, t)
-            # if t == tmax + 1
-            #     timed_path = remove_arrival_vertex(timed_path)
-            # end
-            # break
-        elseif t == tmax
-            v = arr
-            Δ_v = get(dists, (t + 1, v), nothing)
-            Δ_v_through_u = Δ_u + heuristic(u)
-            if isnothing(Δ_v) || (Δ_v_through_u < Δ_v)
-                parents[t + 1, v] = (t, u)
-                dists[t + 1, v] = Δ_v_through_u
-                h_v = Δ_v_through_u + heuristic(v)
-                push!(candidates, (t + 1, v) => h_v)
-            end
-        elseif t < tmax
-            for v in outneighbors(g, u)
-                isnothing(heuristic(v)) && continue
-                Δ_v = get(dists, (t + 1, v), nothing)
-                Δ_v_through_u = Δ_u + w[u, v]
-                if isnothing(Δ_v) || (Δ_v_through_u < Δ_v)
-                    parents[t + 1, v] = (t, u)
-                    dists[t + 1, v] = Δ_v_through_u
-                    h_v = Δ_v_through_u + heuristic(v)
-                    push!(candidates, (t + 1, v) => h_v)
-                end
-            end
-        end
-    end
     return nothing
 end
 
@@ -257,12 +266,13 @@ function shortest_paths(
     sources::Vector{V},
     targets::Vector{V},
     departure_times::Vector{T}=zeros(T, length(sources));
-    heuristic::Function=n -> zero(C),
+    heuristic::Union{Symbol,Function}=:dijkstra,
     max_iter::UInt=typemax(UInt),
     multi_threads::Bool=true,
 ) where {V,C,T}
     @assert length(sources) == length(targets) == length(departure_times) "Number of agents must be consistent on sources, targets, and departure_times"
 
+    # Multi-threaded solution
     if multi_threads
         paths = Vector{Vector{Tuple{T,V}}}(undef, length(sources))
         costs = zeros(C, length(sources))
