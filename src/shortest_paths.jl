@@ -165,9 +165,11 @@ Returns the path as a vector of time-expanded vertices, return nothing if fail t
 where `V` is the type of vertex; `T` is the type of time; and `C` is the type of cost
 
 # Keyword arguments
-- `heuristic::Function`: given a vertex as input, returns the estimated cost from this vertex
+- `heuristic::Union{Symbol,Function}`: given a vertex as input, returns the estimated cost from this vertex
 to target. This estimation has to always underestimate the cost to guarantee optimal result.
-i.e. h(n) ≤ d(n) always true for all n. By default always returns 0
+i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
+    - `:lazy`: always return 0
+    - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
 - `max_iter::UInt`: maximum iteration of individual A*, by default `typemax(UInt)`
 """
 function temporal_astar(
@@ -177,9 +179,11 @@ function temporal_astar(
     source::V,
     target::V,
     departure_time::T=0;
+    reserved_vertices::Set{Tuple{T,V}}=Set{Tuple{T,V}}(),
+    reserved_edges::Set{Tuple{T,V,V}}=Set{Tuple{T,V,V}}(),
     heuristic::Union{Symbol,Function}=:dijkstra,
     max_iter::UInt=typemax(UInt),
-) where {V,T,C}
+) where {V,T<:Integer,C}
     # Resolve heuristic
     if isa(heuristic, Symbol)
         if heuristic == :dijkstra
@@ -221,22 +225,29 @@ function temporal_astar(
 
         # Explore the neighbors of current vertex
         for v in outneighbors(network, vertex)
-            tentative_g_score =
-                g_score[t, vertex] + edge_costs[t + one(T), agent, vertex, v]
-            neighbor_g_score::C = get(g_score, (t + one(T), v), typemax(C))
+            next_time = t + one(T)
+            # Skip exploration if the vertex is already reserved
+            if (next_time, v) in reserved_vertices ||
+                (next_time, vertex, v) in reserved_edges
+                continue
+            end
+
+            # Compute tentative score for potential update
+            tentative_g_score = g_score[t, vertex] + edge_costs[next_time, agent, vertex, v]
+            neighbor_g_score::C = get(g_score, (next_time, v), typemax(C))
 
             # Record a neighbor as a good node to move forward if
             # we find a lower cost path compared to the previous exploration on this node
             if tentative_g_score < neighbor_g_score
-                parents[t + one(T), v] = node
-                g_score[t + one(T), v] = tentative_g_score
+                parents[next_time, v] = node
+                g_score[next_time, v] = tentative_g_score
                 f_score = tentative_g_score + heuristic(v)
-                push!(open_set, (t + one(T), v) => f_score)
+                push!(open_set, (next_time, v) => f_score)
             end
         end
     end
 
-    return nothing
+    return nothing, nothing
 end
 
 """
@@ -254,9 +265,11 @@ Apply A* for all the agents in parallel. Returns the paths and costs of individu
 - `departure_times`: time when agents start traveling
 
 # Keyword arguments
-- `heuristic::Function`: given a vertex as input, returns the estimated cost from this vertex
+- `heuristic::Union{Symbol,Function}`: given a vertex as input, returns the estimated cost from this vertex
 to target. This estimation has to always underestimate the cost to guarantee optimal result.
-i.e. h(n) ≤ d(n) always true for all n. By default always returns 0
+i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
+    - `:lazy`: always return 0
+    - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
 - `max_iter::UInt`: maximum iteration of individual A*, by default `typemax(UInt)`
 - `multi_threads::Bool`: whether to apply multi threading, by default `true`
 """
@@ -269,7 +282,7 @@ function shortest_paths(
     heuristic::Union{Symbol,Function}=:dijkstra,
     max_iter::UInt=typemax(UInt),
     multi_threads::Bool=true,
-) where {V,C,T}
+) where {V,C,T<:Integer}
     @assert length(sources) == length(targets) == length(departure_times) "Number of agents must be consistent on sources, targets, and departure_times"
 
     # Multi-threaded solution
