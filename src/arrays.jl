@@ -23,7 +23,7 @@ function sorted_rank(tree::AVLTree{DimensionFreeData}, key::NTuple{N,Int}) where
     return sorted_rank(tree, DimensionFreeData(nothing, key...))
 end
 function sorted_rank(tree::AVLTree{DimensionFreeData}, key::Vararg{Int})
-    return sorted_rank(tree, tuple(key))
+    return sorted_rank(tree, DimensionFreeData(nothing, key))
 end
 
 function Base.haskey(tree::AVLTree{DimensionFreeData}, key::NTuple{N,Int}) where {N}

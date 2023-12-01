@@ -276,7 +276,7 @@ function shortest_paths(
     edge_costs::DynamicDimensionArray{C},
     sources::Vector{V},
     targets::Vector{V},
-    departure_times::Vector{T}=zeros(T, length(sources));
+    departure_times::Vector{T}=zeros(Int, length(sources));
     heuristic::Union{Symbol,Function}=:dijkstra,
     max_iter::Int=typemax(Int),
     multi_threads::Bool=true,
@@ -317,7 +317,7 @@ Return whether the planning is failed by path
 - `path::Vector{Tuple{T,V}}`: sequence of time-expanded vertices, planning failed if it's empty
 - `cost`: dummy, only checks path if path is given
 """
-function is_planning_failed(path::Vector{Tuple{T,V}}, cost) where {T,V}
+function is_planning_failed(path::Vector{Tuple{T,V}}, cost=0) where {T,V}
     return length(path) == 0
 end
 """
