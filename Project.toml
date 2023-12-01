@@ -11,9 +11,9 @@ Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 DataStructures = "0.18"
 Graphs = "1.9"
 julia = "1"
-Aqua = "0.8"
-JET = "0.8"
-JuliaFormatter = "1"
+Aqua = "^0"
+JET = "^0"
+JuliaFormatter = "^1"
 Test = "1"
 
 [extras]
