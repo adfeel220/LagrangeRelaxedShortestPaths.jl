@@ -67,9 +67,8 @@ modified based on Lagrange relaxation.
 # Keyword arguments
 - `heuristic::Union{Symbol,Function}`: given a vertex as input, returns the estimated cost from this vertex
 to target. This estimation has to always underestimate the cost to guarantee optimal result.
-i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
-    - `:lazy`: always return 0
-    - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
+i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports `:lazy` always return 0;
+`:dijkstra`: Dijkstra on the static graph from target vertex as estimation
 - `astar_max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 - `multi_threads::Bool`: whether to apply multi threading, by default `true`
 - `lagrange_max_iter::Int`: maximum iteration number of Lagrange optimization step, by default `typemax(Int)`
@@ -92,20 +91,6 @@ function lagrange_relaxed_shortest_path(
     silent::Bool=true,
 ) where {C}
     multiplier = DynamicDimensionArray(zero(C))
-
-    # Guarantee a feasible solution by prioritized planning
-    pp_paths, pp_scores = prioritized_planning(
-        network,
-        edge_costs,
-        source_vertices,
-        target_vertices,
-        departure_times,
-        priority;
-        swap_conflict,
-        heuristic,
-        max_iter=astar_max_iter,
-    )
-    pp_total_score = sum(pp_scores)
 
     start_time = -1.0
     # main loop for lagrange relaxed problem
@@ -135,11 +120,8 @@ function lagrange_relaxed_shortest_path(
         edge_conflicts = detect_edge_conflict(paths; swap=swap_conflict)
 
         if is_conflict_free(vertex_conflicts) && is_conflict_free(edge_conflicts)
-            if total_score < pp_total_score
-                return paths, scores
-            else
-                return pp_paths, pp_scores
-            end
+            !silent && @info "Find solution after $iter iterations"
+            return paths, scores
         end
 
         if !is_conflict_free(vertex_conflicts)
@@ -163,7 +145,18 @@ function lagrange_relaxed_shortest_path(
     end
 
     @info "Timeout after $lagrange_max_iter iterations, return result from prioritized planning"
-    return pp_paths, pp_scores
+    # Guarantee a feasible solution by prioritized planning
+    return prioritized_planning(
+        network,
+        edge_costs,
+        source_vertices,
+        target_vertices,
+        departure_times;
+        priority,
+        swap_conflict,
+        heuristic,
+        max_iter=astar_max_iter,
+    )
 end
 
 """

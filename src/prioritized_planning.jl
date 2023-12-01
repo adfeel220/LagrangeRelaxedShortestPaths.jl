@@ -47,15 +47,14 @@ Run prioritized planning for all the agents
 - `sources`: starting vertices of agents
 - `targets`: target vertices for the agents to go to
 - `departure_times::Vector{T}`: time when agents start traveling
-- `priority`: sequence to do shortest path, is a permutation of agents
 
 # Keyword arguments
+- `priority`: sequence to do shortest path, is a permutation of agents
 - `swap_conflict::Bool`: whether to include swapping conflict in the algorithm
 - `heuristic::Union{Symbol,Function}`: given a vertex as input, returns the estimated cost from this vertex
 to target. This estimation has to always underestimate the cost to guarantee optimal result.
-i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
-    - `:lazy`: always return 0
-    - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
+i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports `:lazy` always return 0;
+`:dijkstra`: Dijkstra on the static graph from target vertex as estimation
 - `max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 """
 function prioritized_planning(
@@ -63,8 +62,8 @@ function prioritized_planning(
     edge_costs::DynamicDimensionArray{C},
     sources,
     targets,
-    departure_times::Vector{T}=zeros(Int, length(sources)),
-    priority=Base.OneTo(length(sources));
+    departure_times::Vector{T}=zeros(Int, length(sources));
+    priority=Base.OneTo(length(sources)),
     swap_conflict::Bool=false,
     heuristic::Union{Symbol,Function}=:dijkstra,
     max_iter::Int=typemax(Int),
@@ -100,6 +99,9 @@ function prioritized_planning(
         )
 
         # reserve vertex and edge occupancies
+        if is_planning_failed(paths[ag])
+            continue
+        end
         push!(reserved_vertices, paths[ag]...)
         edge_reserve = vertex_path_to_edge_reservation(paths[ag]; swap=swap_conflict)
         push!(reserved_edges, edge_reserve...)

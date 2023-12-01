@@ -167,9 +167,8 @@ where `V` is the type of vertex; `T` is the type of time; and `C` is the type of
 # Keyword arguments
 - `heuristic::Union{Symbol,Function}`: given a vertex as input, returns the estimated cost from this vertex
 to target. This estimation has to always underestimate the cost to guarantee optimal result.
-i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
-    - `:lazy`: always return 0
-    - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
+i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports `:lazy` always return 0;
+`:dijkstra`: Dijkstra on the static graph from target vertex as estimation
 - `max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 """
 function temporal_astar(
@@ -247,7 +246,7 @@ function temporal_astar(
         end
     end
 
-    return nothing, nothing
+    return Vector{Tuple{T,V}}(), typemax(C)
 end
 
 """
@@ -267,9 +266,8 @@ Apply A* for all the agents in parallel. Returns the paths and costs of individu
 # Keyword arguments
 - `heuristic::Union{Symbol,Function}`: given a vertex as input, returns the estimated cost from this vertex
 to target. This estimation has to always underestimate the cost to guarantee optimal result.
-i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
-    - `:lazy`: always return 0
-    - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
+i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports `:lazy` always return 0;
+`:dijkstra`: Dijkstra on the static graph from target vertex as estimation
 - `max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 - `multi_threads::Bool`: whether to apply multi threading, by default `true`
 """
@@ -309,4 +307,26 @@ function shortest_paths(
     ]
     # unzip results into two separated vectors for paths and costs
     return [first(res) for res in results], [last(res) for res in results]
+end
+
+"""
+    is_planning_failed(path[, cost])
+Return whether the planning is failed by path
+
+# Arguments
+- `path::Vector{Tuple{T,V}}`: sequence of time-expanded vertices, planning failed if it's empty
+- `cost`: dummy, only checks path if path is given
+"""
+function is_planning_failed(path::Vector{Tuple{T,V}}, cost) where {T,V}
+    return length(path) == 0
+end
+"""
+    is_planning_failed(cost)
+Return whether the planning is failed by cost value
+
+# Arguments
+- `cost<:Number`: cost of the proposed path, planning failed if it's `typemax`
+"""
+function is_planning_failed(cost::C) where {C<:Number}
+    return cost == typemax(C)
 end
