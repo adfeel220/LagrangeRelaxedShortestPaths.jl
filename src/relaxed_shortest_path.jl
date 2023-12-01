@@ -60,8 +60,8 @@ modified based on Lagrange relaxation.
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
 - `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
-- `sources::Vector{V}`: starting vertices of agents
-- `targets::Vector{V}`: target vertices for the agents to go to
+- `sources_vertices`: starting vertices of agents
+- `targets_vertices`: target vertices for the agents to go to
 - `departure_times`: time when agents start traveling
 
 # Keyword arguments
@@ -70,37 +70,54 @@ to target. This estimation has to always underestimate the cost to guarantee opt
 i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
     - `:lazy`: always return 0
     - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
-- `astar_max_iter::UInt`: maximum iteration of individual A*, by default `typemax(UInt)`
+- `astar_max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 - `multi_threads::Bool`: whether to apply multi threading, by default `true`
-- `lagrange_max_iter::UInt`: maximum iteration number of Lagrange optimization step
-- `step_size`: base step size of lagrange optimization step
+- `lagrange_max_iter::Int`: maximum iteration number of Lagrange optimization step, by default `typemax(Int)`
+- `step_size`: base step size of lagrange optimization step, by default `0.01`
+- `silent::Bool`: disable printing status on the console, by default `true`
 """
 function lagrange_relaxed_shortest_path(
     network::AbstractGraph,
+    edge_costs::DynamicDimensionArray{C},
     source_vertices,
     target_vertices,
-    edge_cost::DynamicDimensionArray{C},
-    departure_times=zeros(Int, length(source_vertices));
+    departure_times=zeros(Int, length(source_vertices)),
+    priority=Base.OneTo(length(source_vertices));
     swap_conflict::Bool=false,
     heuristic::Union{Symbol,Function}=:dijkstra,
-    astar_max_iter::UInt=typemax(UInt),
+    astar_max_iter::Int=typemax(Int),
     multi_threads::Bool=true,
-    lagrange_max_iter::UInt=typemax(UInt),
+    lagrange_max_iter::Int=typemax(Int),
     step_size=1e-2,
+    silent::Bool=true,
 ) where {C}
-    iter = 0
-    start_time = -1.0
-
     multiplier = DynamicDimensionArray(zero(C))
 
-    while true
-        if time() - start_time > 0.2
+    # Guarantee a feasible solution by prioritized planning
+    pp_paths, pp_scores = prioritized_planning(
+        network,
+        edge_costs,
+        source_vertices,
+        target_vertices,
+        departure_times,
+        priority;
+        swap_conflict,
+        heuristic,
+        max_iter=astar_max_iter,
+    )
+    pp_total_score = sum(pp_scores)
+
+    start_time = -1.0
+    # main loop for lagrange relaxed problem
+    for iter in zero(Int):lagrange_max_iter
+        # Show status
+        if !silent && (time() - start_time > 0.2)
             print("Iter = $iter \r")
             start_time = time()
         end
-        iter += 1
 
-        cost = compute_relaxed_cost(edge_cost, multiplier)
+        # Update the modified cost from original cost
+        cost = compute_relaxed_cost(edge_costs, multiplier)
 
         paths, scores = shortest_paths(
             network,
@@ -112,21 +129,18 @@ function lagrange_relaxed_shortest_path(
             max_iter=astar_max_iter,
             multi_threads,
         )
-
-        if iter >= lagrange_max_iter
-            @info "Timeout after $iter iterations"
-            return paths
-        end
+        total_score = sum(scores)
 
         vertex_conflicts = detect_vertex_conflict(paths)
         edge_conflicts = detect_edge_conflict(paths; swap=swap_conflict)
 
         if is_conflict_free(vertex_conflicts) && is_conflict_free(edge_conflicts)
-            @info "Iter $iter"
-            return paths
+            if total_score < pp_total_score
+                return paths, scores
+            else
+                return pp_paths, pp_scores
+            end
         end
-
-        total_score = sum(scores)
 
         if !is_conflict_free(vertex_conflicts)
             update_multiplier!(
@@ -147,6 +161,9 @@ function lagrange_relaxed_shortest_path(
             )
         end
     end
+
+    @info "Timeout after $lagrange_max_iter iterations, return result from prioritized planning"
+    return pp_paths, pp_scores
 end
 
 """

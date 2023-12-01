@@ -56,7 +56,7 @@ to target. This estimation has to always underestimate the cost to guarantee opt
 i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
     - `:lazy`: always return 0
     - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
-- `max_iter::UInt`: maximum iteration of individual A*, by default `typemax(UInt)`
+- `max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 """
 function prioritized_planning(
     network::AbstractGraph{V},
@@ -67,7 +67,7 @@ function prioritized_planning(
     priority=Base.OneTo(length(sources));
     swap_conflict::Bool=false,
     heuristic::Union{Symbol,Function}=:dijkstra,
-    max_iter::UInt=typemax(UInt),
+    max_iter::Int=typemax(Int),
 ) where {V,C,T<:Integer}
     @assert length(sources) ==
         length(targets) ==

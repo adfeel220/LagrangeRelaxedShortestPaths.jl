@@ -170,7 +170,7 @@ to target. This estimation has to always underestimate the cost to guarantee opt
 i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
     - `:lazy`: always return 0
     - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
-- `max_iter::UInt`: maximum iteration of individual A*, by default `typemax(UInt)`
+- `max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 """
 function temporal_astar(
     network::AbstractGraph{V},
@@ -182,7 +182,7 @@ function temporal_astar(
     reserved_vertices::Set{Tuple{T,V}}=Set{Tuple{T,V}}(),
     reserved_edges::Set{Tuple{T,V,V}}=Set{Tuple{T,V,V}}(),
     heuristic::Union{Symbol,Function}=:dijkstra,
-    max_iter::UInt=typemax(UInt),
+    max_iter::Int=typemax(Int),
 ) where {V,T<:Integer,C}
     # Resolve heuristic
     if isa(heuristic, Symbol)
@@ -209,7 +209,7 @@ function temporal_astar(
     # g_score store the cost from source to a specific node
     g_score = Dict{Tuple{T,V},C}((departure_time, source) => zero(C))
 
-    for itr in zero(UInt):max_iter
+    for itr in zero(Int):max_iter
         if isempty(open_set)
             break
         end
@@ -270,7 +270,7 @@ to target. This estimation has to always underestimate the cost to guarantee opt
 i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports
     - `:lazy`: always return 0
     - `:dijkstra`: dijkstra on the static graph from target vertex as estimation
-- `max_iter::UInt`: maximum iteration of individual A*, by default `typemax(UInt)`
+- `max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 - `multi_threads::Bool`: whether to apply multi threading, by default `true`
 """
 function shortest_paths(
@@ -280,7 +280,7 @@ function shortest_paths(
     targets::Vector{V},
     departure_times::Vector{T}=zeros(T, length(sources));
     heuristic::Union{Symbol,Function}=:dijkstra,
-    max_iter::UInt=typemax(UInt),
+    max_iter::Int=typemax(Int),
     multi_threads::Bool=true,
 ) where {V,C,T<:Integer}
     @assert length(sources) == length(targets) == length(departure_times) "Number of agents must be consistent on sources, targets, and departure_times"
