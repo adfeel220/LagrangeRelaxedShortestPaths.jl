@@ -116,5 +116,5 @@ function Base.iterate(arr::DynamicDimensionArray, i=1)
 end
 
 function delete!(arr::DynamicDimensionArray, index...)
-    delete!(arr.data, index)
+    return delete!(arr.data, index)
 end
