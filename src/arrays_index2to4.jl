@@ -76,16 +76,18 @@ mutable struct DynamicDimensionArray{T}
 
     default::T
 end
+
+Base.length(arr::DynamicDimensionArray) = length(arr.d2) + length(arr.d3) + length(arr.d4)
+
 function Base.show(io::IO, arr::DynamicDimensionArray)
-    ndata = length(arr.d2) + length(arr.d3) + length(arr.d4)
     return show(
         io,
-        """DynamicDimensionArray{$(typeof(arr.default))}: $(ndata) registered entries with default = $(arr.default).""",
+        """DynamicDimensionArray{$(typeof(arr.default))}: $(length(arr)) registered entries with default = $(arr.default).""",
     )
 end
 
 """
-    DynamicDimensionArray([default=0.0]; align_right=true)
+    DynamicDimensionArray([default=0.0])
 Create an empty `DynamicDimensionArray` with a default value (`{Float64}(0.0)` if not specified).
 """
 function DynamicDimensionArray(default::T=zero(Float64)) where {T}
@@ -134,7 +136,6 @@ function Base.setindex!(
     end
     return arr
 end
-Base.length(arr::DynamicDimensionArray) = length(arr.d2) + length(arr.d3) + length(arr.d4)
 
 function Base.iterate(arr::DynamicDimensionArray, i=1)
     if i > length(arr)

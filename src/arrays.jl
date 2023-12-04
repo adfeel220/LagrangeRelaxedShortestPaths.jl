@@ -81,7 +81,7 @@ function Base.show(io::IO, arr::DynamicDimensionArray)
 end
 
 """
-    DynamicDimensionArray([default=0.0]; align_right=true)
+    DynamicDimensionArray([default=0.0])
 Create an empty `DynamicDimensionArray` with a default value (`{Float64}(0.0)` if not specified).
 """
 function DynamicDimensionArray(default::T=zero(Float64)) where {T}
