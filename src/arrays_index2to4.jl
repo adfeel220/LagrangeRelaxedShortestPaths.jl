@@ -100,22 +100,23 @@ function DynamicDimensionArray(default::T=zero(Float64)) where {T}
 end
 
 function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where {T}
+    start_idx = 1
     if length(index) > 4
-        index = index[(end - 3):end]
+        start_idx = length(index) - 3
     end
     if length(index) == 4
         data = find_data(arr.d4, index)
         if !isnothing(data)
             return data
         end
-        index = index[2:end]
+        start_idx += 1
     end
     if length(index) == 3
         data = find_data(arr.d3, index)
         if !isnothing(data)
             return data
         end
-        index = index[2:end]
+        start_idx += 1
     end
     if length(index) == 2
         data = find_data(arr.d2, index)
