@@ -79,7 +79,9 @@ function lagrange_relaxed_shortest_path(
     astar_max_iter::Int=typemax(Int),
     multi_threads::Bool=true,
     lagrange_max_iter::Int=typemax(Int),
-    optimizer::Optimizer{C}=AdamOptimizer{C}(; α=1e-2 * minimum(x -> x.second, edge_costs; init=edge_costs.default)),  # default step size as 1% of minimum cost
+    optimizer::Optimizer{C}=AdamOptimizer{C}(;
+        α=1e-2 * minimum(x -> x.second, edge_costs; init=edge_costs.default)
+    ),  # default step size as 1% of minimum cost
     perturbation::C=1e-3,
     rng_seed=nothing,
     silent::Bool=true,
@@ -112,11 +114,8 @@ function lagrange_relaxed_shortest_path(
             multi_threads,
         )
 
-        vertex_occupancy = detect_vertex_occupancy(paths)
-        edge_occupancy = detect_edge_occupancy(paths)
-
-        vertex_conflicts = detect_conflict(vertex_occupancy)
-        edge_conflicts = detect_conflict(edge_occupancy)
+        vertex_conflicts = detect_vertex_conflicts(paths)
+        edge_conflicts = detect_edge_conflicts(paths)
 
         if is_conflict_free(vertex_conflicts) && is_conflict_free(edge_conflicts)
             !silent && @info "Find solution after $iter iterations"
@@ -124,7 +123,7 @@ function lagrange_relaxed_shortest_path(
         end
 
         update_multiplier!(
-            multiplier, optimizer, vertex_occupancy, edge_occupancy; perturbation, rng
+            multiplier, optimizer, vertex_conflicts, edge_conflicts; perturbation, rng
         )
     end
 

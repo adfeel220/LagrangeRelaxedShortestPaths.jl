@@ -118,34 +118,25 @@ function step!(
 end
 
 """
-    compute_gradient(multiplier, vertex_occupancy, edge_occupancy)
-Compute gradient given the current occupancy table of agents on the network.
+    compute_gradient(multiplier, vertex_conflict, edge_conflict)
+Compute gradient given the current conflict table of agents on the network.
 Only vertex and edge conflicts (potential swapping conflicts) are considered.
 
 # Arguments
 - `multiplier::DynamicDimensionArray{C}`: Lagrange multiplier with type of cost `C`
-- `vertex_occupancy::VertexConflicts{T,V,A}`: occupancy table of vertices with type of time `T`,
+- `vertex_conflict::VertexConflicts{T,V,A}`: conflict table of vertices with type of time `T`,
 vertex `V`, agent `A`
-- `edge_occupancy::EdgeConflicts{T,V,A}`: occupancy table of edges with type of time `T`,
+- `edge_conflict::EdgeConflicts{T,V,A}`: conflict table of edges with type of time `T`,
 vertex `V`, agent `A`
 """
 function compute_gradient(
     multiplier::DynamicDimensionArray{C},
-    vertex_occupancy::VertexConflicts{T,V,A},
-    edge_occupancy::EdgeConflicts{T,V,A},
+    vertex_conflicts::VertexConflicts{T,V,A},
+    edge_conflicts::EdgeConflicts{T,V,A},
 ) where {C,T,V,A}
-    visited_instances = Set{Tuple{T,A,V,V}}()
-
     grad = DynamicDimensionArray(zero(C))
     # vertex conflicts
-    for ((timestamp, vertex), agents) in vertex_occupancy
-        # Only one agent occupies, maintain multiplier value
-        if length(agents) == 1
-            ag, from_v = first(agents)
-            push!(visited_instances, (timestamp, ag, from_v, vertex))
-            continue
-        end
-
+    for ((timestamp, vertex), agents) in vertex_conflicts
         # Multiple agents occupies, contains conflict
         violation = length(agents) - one(C)
         for (ag, from_v) in agents
@@ -155,14 +146,7 @@ function compute_gradient(
     end
 
     # edge conflicts
-    for ((timestamp, from_v, to_v), agents) in edge_occupancy
-        # Only one agent occupies, maintain multiplier value
-        if length(agents) == 1
-            ag, from_v = first(agents)
-            push!(visited_instances, (timestamp, ag, from_v, to_v))
-            continue
-        end
-
+    for ((timestamp, from_v, to_v), agents) in edge_conflicts
         # Multiple agents occupies, contains conflict
         violation = length(agents) - one(C)
         for (ag, is_flip) in agents
