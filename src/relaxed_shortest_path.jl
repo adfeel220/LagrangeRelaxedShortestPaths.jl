@@ -87,7 +87,7 @@ function lagrange_relaxed_shortest_path(
     silent::Bool=true,
 ) where {C}
     multiplier = DynamicDimensionArray(zero(C))
-    cost = deepcopy(edge_costs) #  modified cost
+    cost = deepcopy(edge_costs)  # modified cost
     reset!(optimizer)
     rng = isnothing(rng_seed) ? Xoshiro() : Xoshiro(rng_seed)
 
@@ -114,8 +114,8 @@ function lagrange_relaxed_shortest_path(
             multi_threads,
         )
 
-        vertex_conflicts = detect_vertex_conflicts(paths)
-        edge_conflicts = detect_edge_conflicts(paths)
+        vertex_conflicts = detect_vertex_conflict(paths)
+        edge_conflicts = detect_edge_conflict(paths)
 
         if is_conflict_free(vertex_conflicts) && is_conflict_free(edge_conflicts)
             !silent && @info "Find solution after $iter iterations"

@@ -141,7 +141,6 @@ function compute_gradient(
         violation = length(agents) - one(C)
         for (ag, from_v) in agents
             grad[timestamp, ag, from_v, vertex] = violation
-            push!(visited_instances, (timestamp, ag, from_v, vertex))
         end
     end
 
@@ -152,7 +151,6 @@ function compute_gradient(
         for (ag, is_flip) in agents
             v1, v2 = is_flip ? (to_v, from_v) : (from_v, to_v)
             grad[timestamp, ag, v1, v2] += violation
-            push!(visited_instances, (timestamp, ag, v1, v2))
         end
     end
 
@@ -161,16 +159,16 @@ end
 
 """
     update_multiplier!(
-        multiplier, optimizer, vertex_occupancy, edge_occupancy
+        multiplier, optimizer, vertex_conflicts, edge_conflicts
     )
-Update the Lagrange multipleir based on the current occupancy table
+Update the Lagrange multipleir based on the current conflicts table
 
 # Arguments
 - `multiplier::DynamicDimensionArray{C}`: Lagrange multiplier with type of cost `C`
 - `optimizer::Optimizer{C}`: optimizer for gradient ascend on the Lagrange multiplier
-- `vertex_occupancy::VertexConflicts{T,V,A}`: occupancy table of vertices with type of time `T`,
+- `vertex_conflicts::VertexConflicts{T,V,A}`: conflicts table of vertices with type of time `T`,
 vertex `V`, agent `A`
-- `edge_occupancy::EdgeConflicts{T,V,A}`: occupancy table of edges with type of time `T`,
+- `edge_conflicts::EdgeConflicts{T,V,A}`: conflicts table of edges with type of time `T`,
 vertex `V`, agent `A`
 - `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
 - `rng`: random generator
@@ -178,12 +176,12 @@ vertex `V`, agent `A`
 function update_multiplier!(
     multiplier::DynamicDimensionArray{C},
     optimizer::Optimizer{C},
-    vertex_occupancy::VertexConflicts{T,V,A},
-    edge_occupancy::EdgeConflicts{T,V,A};
+    vertex_conflicts::VertexConflicts{T,V,A},
+    edge_conflicts::EdgeConflicts{T,V,A};
     perturbation::C=1e-3,
     rng=default_rng(),
 ) where {C,T,V,A}
-    grad = compute_gradient(multiplier, vertex_occupancy, edge_occupancy)
+    grad = compute_gradient(multiplier, vertex_conflicts, edge_conflicts)
     step!(multiplier, optimizer, grad; perturbation, rng)
 
     return grad
