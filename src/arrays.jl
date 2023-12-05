@@ -129,3 +129,14 @@ function Base.iterate(arr::DynamicDimensionArray, i=1)
     end
     return Pair(arr.data[i].index, arr.data[i].data), i + 1
 end
+
+function delete!(arr::DynamicDimensionArray{T}, index::NTuple{N,Int}) where{T,N}
+    if length(index) == 4
+        delete!(arr.d4, DimensionFreeData{T}(index))
+    elseif length(index) == 3
+        delete!(arr.d3, DimensionFreeData{T}(index))
+    elseif length(index) == 2
+        delete!(arr.d2, DimensionFreeData{T}(index))
+    end
+    return arr
+end

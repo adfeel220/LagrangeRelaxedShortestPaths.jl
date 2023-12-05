@@ -20,6 +20,21 @@ to detect swapping conflict, as the format of (agent, is_flip)
 const EdgeConflicts{T,V,A} = Dict{Tuple{T,V,V},Vector{Tuple{A,Bool}}}
 
 """
+    detect_conflict(occupancy[, capacity])
+Detect conflicts given the occupancy table
+
+# Arguments
+- `occupancy::Dict`: occupancy table
+- `capacity::Int`: capacity of vertices, by default 1
+"""
+function detect_conflict(occupancy::Dict{K,V}, capacity::Int=1)::Dict{K,V} where {K,V}
+    return Dict(
+        timed_resource => agents for
+        (timed_resource, agents) in occupancy if length(agents) > capacity
+    )
+end
+
+"""
     detect_vertex_occupancy(timed_paths; return_first)
 Return a vertex occupancy table
 
@@ -57,7 +72,7 @@ function detect_vertex_occupancy(
 end
 
 """
-    detect_vertex_conflict(timed_paths; return_first)
+    detect_vertex_conflict(timed_paths[, capacity]; return_first)
 Detect vertex conflicts given the timed paths of all agents
 
 # Arguments
@@ -72,11 +87,7 @@ function detect_vertex_conflict(
 )::VertexConflicts{T,V,Int} where {T,V}
     vertex_occupancy = detect_vertex_occupancy(timed_paths; return_first)
 
-    # Check overlaps and returns those having overlaps
-    return Dict(
-        timed_vertex => agents for
-        (timed_vertex, agents) in vertex_occupancy if length(agents) > capacity
-    )
+    return detect_conflict(vertex_occupancy, capacity)
 end
 
 """
@@ -127,12 +138,12 @@ function detect_edge_occupancy(
 end
 
 """
-    detect_edge_conflict(timed_paths; return_first)
+    detect_edge_conflict(timed_paths[, capacity]; return_first)
 Detect edge conflicts given the timed paths of all agents
 
 # Arguments
 - `timed_paths::Vector{TimedPath{T,V}}`: Paths as sequence of time-expanded vertices for every agent
-- `capacity::Int`: capacity of vertices, by default 1
+- `capacity::Int`: capacity of edges, by default 1
 
 # Keyword arguments
 - `swap::Bool`: whether to detect swapping confliccts, by default `false`
@@ -147,11 +158,10 @@ function detect_edge_conflict(
     edge_occupancy = detect_edge_occupancy(timed_paths; swap, return_first)
 
     # Check overlaps and returns those having overlaps
-    return Dict(
-        timed_edge => agents for
-        (timed_edge, agents) in edge_occupancy if length(agents) > capacity
-    )
+    return detect_conflict(edge_occupancy, capacity)
 end
+
+n_conflicts(conflict::Dict)::Int = length(conflict)
 
 """
     is_conflict_free(conflict::Dict)

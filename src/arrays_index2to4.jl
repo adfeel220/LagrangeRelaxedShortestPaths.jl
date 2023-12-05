@@ -61,6 +61,8 @@ end
 """
     DynamicDimensionArray{T}
 A dimension free array in which overindexing is allowed. No out of bound error for this array.
+An special optimized version that only allows index to have length 2-4, as generic implementation generates
+instable type that slows down computation.
 
 Implemented for fast searching and single entity modification, not suitable for vectorized computation
 The indexing of this array follows the rules below:
@@ -107,14 +109,14 @@ function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where 
         if !isnothing(data)
             return data
         end
-        index = index[(begin + 1):end]
+        index = index[2:end]
     end
     if length(index) == 3
         data = find_data(arr.d3, index)
         if !isnothing(data)
             return data
         end
-        index = index[(begin + 1):end]
+        index = index[2:end]
     end
     if length(index) == 2
         data = find_data(arr.d2, index)
@@ -137,7 +139,7 @@ function Base.setindex!(
     return arr
 end
 
-function Base.iterate(arr::DynamicDimensionArray, i=1)
+function Base.iterate(arr::DynamicDimensionArray{T}, i=1) where {T}
     if i > length(arr)
         return nothing
     end
@@ -153,4 +155,15 @@ function Base.iterate(arr::DynamicDimensionArray, i=1)
         ),
         i + 1
     end
+end
+
+function delete!(arr::DynamicDimensionArray{T}, index::NTuple{N,Int}) where{T,N}
+    if length(index) == 4
+        delete!(arr.d4, DimensionFreeData{T}(index))
+    elseif length(index) == 3
+        delete!(arr.d3, DimensionFreeData{T}(index))
+    elseif length(index) == 2
+        delete!(arr.d2, DimensionFreeData{T}(index))
+    end
+    return arr
 end
