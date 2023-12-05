@@ -161,6 +161,10 @@ function detect_edge_conflict(
     return detect_conflict(edge_occupancy, capacity)
 end
 
+"""
+    n_conflicts(conflict)
+Return the number of conflicts given a conflict object
+"""
 n_conflicts(conflict::Dict)::Int = length(conflict)
 
 """

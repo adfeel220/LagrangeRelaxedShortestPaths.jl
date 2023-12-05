@@ -99,13 +99,17 @@ function DynamicDimensionArray(default::T=zero(Float64)) where {T}
     return DynamicDimensionArray{T}(t2, t3, t4, default)
 end
 
-function degenerate_tuple(t::NTuple{N,T})::NTuple{N-1,T} where {N,T}
-    return ntuple(i -> t[i+1], N-1)
+"""
+    degenerate_tuple(t)
+Return a new tuple without the leftmost element of the original tuple in a type stable method
+"""
+function degenerate_tuple(t::NTuple{N,T})::NTuple{N - 1,T} where {N,T}
+    return ntuple(i -> t[i + 1], N - 1)
 end
 
 function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where {T}
     if length(index) > 4
-        index = index[end-3:end]
+        index = index[(end - 3):end]
     end
     if length(index) == 4
         data = find_data(arr.d4, index)

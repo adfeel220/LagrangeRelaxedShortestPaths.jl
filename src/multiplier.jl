@@ -1,6 +1,6 @@
 """
-    rand_perturbation(val, err=1e-3; rng)
-Return a modified value with ±err ratio of random perturbation.
+    rand_perturbation(val[, perturbation]; rng)
+Return a modified value with `±perturbation` ratio of random perturbation.
 For example, `rand_perturbation(1.0, 0.01)` returns a random number in `[0.99, 1.01]`
 """
 rand_perturbation(val::T, perturbation::T=1e-3; rng=default_rng()) where {T} =
@@ -45,15 +45,17 @@ function reset!(optimizer::AdamOptimizer{T}) where {T}
 end
 
 """
-    step!(param, adam, grad)
+    step!(param, adam, grad; perturbation, rng)
 Update parameter in gradient ascend manner with Adam optimizer using a pre-computed gradient
 
 # Arguments
 - `param::DynamicDimensionArray{T}`: parameter to be updated
 - `adam::AdamOptimizer{T}`: adam optimizer
 - `grad::DynamicDimensionArray{T}`: gradient
+
+# Keyword arguments
 - `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
-- `rng`: random generator
+- `rng`: random generator, by default `default_rng()`
 """
 function step!(
     param::DynamicDimensionArray{T},
@@ -93,15 +95,17 @@ Supports initialization with `@kwdef`, by default utilizes `DynamicDimensionArra
 end
 
 """
-    step!(param, opt, grad)
+    step!(param, opt, grad; perturbation, rng)
 Update parameter in gradient ascend manner with simple gradient optimizer using a pre-computed gradient
 
 # Arguments
 - `param::DynamicDimensionArray{T}`: parameter to be updated
 - `opt::SimpleGradientOptimizer{T}`: simple gradient optimizer
 - `grad::DynamicDimensionArray{T}`: gradient
+
+# Keyword arguments
 - `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
-- `rng`: random generator
+- `rng`: random generator, by default `default_rng()`
 """
 function step!(
     param::DynamicDimensionArray{T},
@@ -159,7 +163,7 @@ end
 
 """
     update_multiplier!(
-        multiplier, optimizer, vertex_conflicts, edge_conflicts
+        multiplier, optimizer, vertex_conflicts, edge_conflicts; perturbation, rng
     )
 Update the Lagrange multipleir based on the current conflicts table
 
@@ -170,8 +174,10 @@ Update the Lagrange multipleir based on the current conflicts table
 vertex `V`, agent `A`
 - `edge_conflicts::EdgeConflicts{T,V,A}`: conflicts table of edges with type of time `T`,
 vertex `V`, agent `A`
+
+# Keyword arguments
 - `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
-- `rng`: random generator
+- `rng`: random generator, by default `default_rng()`
 """
 function update_multiplier!(
     multiplier::DynamicDimensionArray{C},

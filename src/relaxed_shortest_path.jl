@@ -1,11 +1,12 @@
 
 """
-    compute_relaxed_cost(origin_cost, multiplier)
+    update_cost!(origin_cost, cost, multiplier)
 Compute the modified cost function based on the Lagrange multiplier
 
 # Arguments
 - `origin_cost::DynamicDimensionArray{C}`: original network edge cost, indexed by (time, agent, from-v, to-v)
-- `multiplier::DynamicDimensionArray{C}`: Lagrange multiplier
+- `cost::DynamicDimensionArray{C}`: modified cost, indexed by (time, agent, from-v, to-v)
+- `multiplier::DynamicDimensionArray{C}`: Lagrange multiplier, indexed by (time, agent, from-v, to-v)
 """
 function update_cost!(
     origin_cost::DynamicDimensionArray{C},
@@ -41,8 +42,10 @@ end
 
 """
     lagrange_relaxed_shortest_path(
-        network, edge_costs, sources, targets, departure_times;
-        heuristic, max_iter, multi_threads, step_size, lagrange_multiplier
+        network, edge_costs, sources, targets, departure_times, priority;
+        heuristic, astar_max_iter, lagrange_max_iter, hard_timeout,
+        optimizer, perturbation, rng_seed,
+        multi_threads, silent,
     )
 Solve MAPF problem by iteratively resolve the shortest path problems with edge cost
 modified based on Lagrange relaxation.
@@ -53,6 +56,7 @@ modified based on Lagrange relaxation.
 - `sources_vertices`: starting vertices of agents
 - `targets_vertices`: target vertices for the agents to go to
 - `departure_times`: time when agents start traveling
+- `priority`: sequence to do shortest path, is a permutation of agents. By default `OneTo(#agents)`
 
 # Keyword arguments
 - `heuristic::Union{Symbol,Function}`: given a vertex as input, returns the estimated cost from this vertex
@@ -60,11 +64,14 @@ to target. This estimation has to always underestimate the cost to guarantee opt
 i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports `:lazy` always return 0;
 `:dijkstra`: Dijkstra on the static graph from target vertex as estimation
 - `astar_max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
-- `multi_threads::Bool`: whether to apply multi threading, by default `true`
 - `lagrange_max_iter::Int`: maximum iteration number of Lagrange optimization step, by default `typemax(Int)`
+- `hard_timeout::Float64`: maximum physical time duration (in seconds) allowed for the program, by default `Inf`
 - `optimizer::Optimizer{C}`: optimizer for gradient ascend of Lagrange multiplier, by default is the
 `AdamOptimizer` with step size equals to 1% of minimum edge cost
-- `perturbation::C`: 
+- `perturbation::T`: ratio of perturbation for lagrange multiplier update,
+by default `1e-3` (update value in ratio 1±0.001)
+- `rng_seed`: random seed for the program
+- `multi_threads::Bool`: whether to apply multi threading, by default `true`
 - `silent::Bool`: disable printing status on the console, by default `true`
 """
 function lagrange_relaxed_shortest_path(
@@ -77,23 +84,30 @@ function lagrange_relaxed_shortest_path(
     swap_conflict::Bool=false,
     heuristic::Union{Symbol,Function}=:dijkstra,
     astar_max_iter::Int=typemax(Int),
-    multi_threads::Bool=true,
     lagrange_max_iter::Int=typemax(Int),
+    hard_timeout::Float64=Inf,
     optimizer::Optimizer{C}=AdamOptimizer{C}(;
         α=1e-2 * minimum(x -> x.second, edge_costs; init=edge_costs.default)
     ),  # default step size as 1% of minimum cost
     perturbation::C=1e-3,
     rng_seed=nothing,
+    multi_threads::Bool=true,
     silent::Bool=true,
 ) where {C}
+    global_timer = time()
+
     multiplier = DynamicDimensionArray(zero(C))
     cost = deepcopy(edge_costs)  # modified cost
     reset!(optimizer)
     rng = isnothing(rng_seed) ? Xoshiro() : Xoshiro(rng_seed)
 
     start_time = -1.0
+    iter = zero(Int)
     # main loop for lagrange relaxed problem
-    for iter in zero(Int):lagrange_max_iter
+    while true
+        (time() - global_timer) > hard_timeout && break
+        (iter > lagrange_max_iter) && break
+
         # Show status
         if !silent && (time() - start_time > 0.2)
             print("Iter = $iter \r")
@@ -125,10 +139,12 @@ function lagrange_relaxed_shortest_path(
         update_multiplier!(
             multiplier, optimizer, vertex_conflicts, edge_conflicts; perturbation, rng
         )
+
+        iter += 1
     end
 
     if !silent
-        @info "Timeout after $lagrange_max_iter iterations, return result from prioritized planning"
+        @info "Timeout after $iter iterations, return result from prioritized planning"
     end
     # Guarantee a feasible solution by prioritized planning
     return prioritized_planning(
