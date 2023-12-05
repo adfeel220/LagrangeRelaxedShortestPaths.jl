@@ -117,7 +117,9 @@ function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where 
     end
     return data
 end
-function Base.setindex!(arr::DynamicDimensionArray{T}, value::T, index::Vararg{Int}) where {T}
+function Base.setindex!(
+    arr::DynamicDimensionArray{T}, value::T, index::Vararg{Int}
+) where {T}
     set_data!(arr.data, value, index)
     return arr
 end
@@ -130,7 +132,7 @@ function Base.iterate(arr::DynamicDimensionArray, i=1)
     return Pair(arr.data[i].index, arr.data[i].data), i + 1
 end
 
-function delete!(arr::DynamicDimensionArray{T}, index::NTuple{N,Int}) where{T,N}
+function delete!(arr::DynamicDimensionArray{T}, index::NTuple{N,Int}) where {T,N}
     if length(index) == 4
         delete!(arr.d4, DimensionFreeData{T}(index))
     elseif length(index) == 3

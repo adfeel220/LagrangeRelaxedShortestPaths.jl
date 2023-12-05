@@ -79,7 +79,7 @@ function lagrange_relaxed_shortest_path(
     astar_max_iter::Int=typemax(Int),
     multi_threads::Bool=true,
     lagrange_max_iter::Int=typemax(Int),
-    optimizer::Optimizer{C}=AdamOptimizer{C}(α=1e-2*minimum(x->x.second, edge_costs)),  # default step size as 1% of minimum cost
+    optimizer::Optimizer{C}=AdamOptimizer{C}(; α=1e-2 * minimum(x -> x.second, edge_costs)),  # default step size as 1% of minimum cost
     perturbation::C=1e-3,
     rng_seed=nothing,
     silent::Bool=true,
@@ -125,7 +125,9 @@ function lagrange_relaxed_shortest_path(
             return paths, compute_scores(paths, edge_costs)
         end
 
-        update_multiplier!(multiplier, optimizer, vertex_occupancy, edge_occupancy; perturbation, rng)
+        update_multiplier!(
+            multiplier, optimizer, vertex_occupancy, edge_occupancy; perturbation, rng
+        )
     end
 
     if !silent

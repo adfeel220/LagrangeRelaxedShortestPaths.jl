@@ -113,7 +113,7 @@ function directional_star(a::Int; edge_break::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray{Float64}(DimensionFreeData(2.0, 1); default=1.0),
+        edge_cost=DynamicDimensionArray(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
@@ -122,7 +122,7 @@ function directional_star(a::Int; edge_break::Int=1)
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray{Float64}(DimensionFreeData(2.0, 1); default=1.0),
+        edge_cost=DynamicDimensionArray(1.0),
     )
 
     return experiment, discrete_experiment

@@ -99,7 +99,6 @@ function DynamicDimensionArray(default::T=zero(Float64)) where {T}
     return DynamicDimensionArray{T}(t2, t3, t4, default)
 end
 
-
 function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where {T}
     if length(index) > 4
         index = index[(end - 3):end]
@@ -157,7 +156,7 @@ function Base.iterate(arr::DynamicDimensionArray{T}, i=1) where {T}
     end
 end
 
-function delete!(arr::DynamicDimensionArray{T}, index::NTuple{N,Int}) where{T,N}
+function delete!(arr::DynamicDimensionArray{T}, index::NTuple{N,Int}) where {T,N}
     if length(index) == 4
         delete!(arr.d4, DimensionFreeData{T}(index))
     elseif length(index) == 3
