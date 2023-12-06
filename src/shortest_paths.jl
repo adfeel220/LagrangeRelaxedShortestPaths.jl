@@ -1,3 +1,8 @@
+"""
+    TimedPath{T,V}
+Type alias of `Vector{Tuple{T,V}}` to represent a sequence of time expanded vertices
+"""
+const TimedPath{T,V} = Vector{Tuple{T,V}}
 
 """
     backtrace_path(parents, node)
