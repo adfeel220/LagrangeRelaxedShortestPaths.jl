@@ -35,7 +35,8 @@ function compute_scores(
     return [
         sum(
             edge_costs[t2, ag, v1, v2] for ((t1, v1), (t2, v2)) in
-            zip(agent_path[begin:(end - 1)], agent_path[(begin + 1):end])
+            zip(agent_path[begin:(end - 1)], agent_path[(begin + 1):end]);
+            init=typemax(C),
         ) for (ag, agent_path) in enumerate(paths)
     ]
 end
@@ -106,11 +107,11 @@ function lagrange_relaxed_shortest_path(
     # main loop for lagrange relaxed problem
     while true
         (time() - global_timer) > hard_timeout && break
-        (iter > lagrange_max_iter) && break
+        (iter >= lagrange_max_iter) && break
 
         # Show status
-        if !silent && (time() - start_time > 0.2)
-            print("Iter = $iter \r")
+        if !silent && (time() - start_time > 0.25)
+            print("\rIter = $iter")
             start_time = time()
         end
 
@@ -129,10 +130,13 @@ function lagrange_relaxed_shortest_path(
         )
 
         vertex_conflicts = detect_vertex_conflict(paths)
-        edge_conflicts = detect_edge_conflict(paths)
+        edge_conflicts = detect_edge_conflict(paths; swap=swap_conflict)
 
         if is_conflict_free(vertex_conflicts) && is_conflict_free(edge_conflicts)
-            !silent && @info "Find solution after $iter iterations"
+            if !silent
+                print("\r")
+                @info "Find solution after $iter iterations"
+            end
             return paths, compute_scores(paths, edge_costs)
         end
 
@@ -143,9 +147,6 @@ function lagrange_relaxed_shortest_path(
         iter += 1
     end
 
-    if !silent
-        @info "Timeout after $iter iterations, return result from prioritized planning"
-    end
     # Guarantee a feasible solution by prioritized planning
     origin_pp_path, origin_pp_scores = prioritized_planning(
         network,

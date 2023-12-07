@@ -8,7 +8,7 @@ A structure to hold all necessary information for executing an MAPF solver
     network::G
     source_vertices::Vector{V}
     target_vertices::Vector{V}
-    edge_cost::DynamicDimensionArray{C} = ones(Float64, (nv(network), nv(network)))
+    edge_costs::DynamicDimensionArray{C} = ones(Float64, (nv(network), nv(network)))
     departure_time::Vector{T} = zeros(Int, length(source_vertices))
 end
 nagents(config::MapfConfig) = length(config.source_vertices)
@@ -29,7 +29,7 @@ Execute a Lagrange relaxed shortest paths with configuration file
 function lagrange_relaxed_shortest_path(config::MapfConfig; kwargs...)
     return lagrange_relaxed_shortest_path(
         config.network,
-        config.edge_cost,
+        config.edge_costs,
         config.source_vertices,
         config.target_vertices,
         config.departure_time;
