@@ -147,7 +147,7 @@ function lagrange_relaxed_shortest_path(
         @info "Timeout after $iter iterations, return result from prioritized planning"
     end
     # Guarantee a feasible solution by prioritized planning
-    return prioritized_planning(
+    origin_pp_path, origin_pp_scores = prioritized_planning(
         network,
         edge_costs,
         source_vertices,
@@ -158,6 +158,33 @@ function lagrange_relaxed_shortest_path(
         heuristic,
         max_iter=astar_max_iter,
     )
+
+    modified_pp_path, _ = prioritized_planning(
+        network,
+        cost,
+        source_vertices,
+        target_vertices,
+        departure_times;
+        priority,
+        swap_conflict,
+        heuristic,
+        max_iter=astar_max_iter,
+    )
+    modified_pp_scores = compute_scores(modified_pp_path, edge_costs)
+
+    if sum(origin_pp_scores) <= sum(modified_pp_scores)
+        if !silent
+            print("\r")
+            @info "Timeout after $iter iterations, return result from prioritized planning with origin cost"
+        end
+        return origin_pp_path, origin_pp_scores
+    else
+        if !silent
+            print("\r")
+            @info "Timeout after $iter iterations, return result from prioritized planning with modified cost"
+        end
+        return modified_pp_path, modified_pp_scores
+    end
 end
 
 """
