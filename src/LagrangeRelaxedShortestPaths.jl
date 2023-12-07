@@ -16,8 +16,14 @@ export lagrange_relaxed_shortest_path
 export prioritized_planning
 export AdamOptimizer, SimpleGradientOptimizer
 
+export nagents
 export parallel_lines,
-    directional_star, grid_cross, line_overlap, wheel_pass, circular_ladder_pass
+    directional_star,
+    grid_cross,
+    line_overlap,
+    wheel_pass,
+    circular_ladder_pass,
+    pp_infeasible_case
 
 include("arrays_index2to4.jl")
 include("shortest_paths.jl")

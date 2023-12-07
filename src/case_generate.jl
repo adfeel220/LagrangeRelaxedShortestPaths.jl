@@ -56,7 +56,7 @@ function parallel_lines(a::Int; edge_break::Int=1)
         network=base_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     discrete_network = DiGraph(a * (edge_break + 1))
@@ -73,7 +73,7 @@ function parallel_lines(a::Int; edge_break::Int=1)
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     return experiment, discrete_experiment
@@ -113,16 +113,19 @@ function directional_star(a::Int; edge_break::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
+    for v in vertices(discrete_network)
+        add_edge!(discrete_network, v, v)
+    end
 
     discrete_experiment = MapfConfig(;
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     return experiment, discrete_experiment
@@ -180,16 +183,19 @@ function grid_cross(row::Int, column::Int; edge_break::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
+    for v in vertices(discrete_network)
+        add_edge!(discrete_network, v, v)
+    end
 
     discrete_experiment = MapfConfig(;
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     return experiment, discrete_experiment
@@ -231,17 +237,20 @@ function line_overlap(n::Int, a::Int; edge_break::Int=1, delayed_departure::Bool
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
         departure_time=departure_time,
     )
 
     discrete_network = break_segments(base_network, edge_break)
+    for v in vertices(discrete_network)
+        add_edge!(discrete_network, v, v)
+    end
 
     discrete_experiment = MapfConfig(;
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
         departure_time=departure_time,
     )
 
@@ -283,16 +292,19 @@ function wheel_pass(a::Int; edge_break::Int=1, shift::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
+    for v in vertices(discrete_network)
+        add_edge!(discrete_network, v, v)
+    end
 
     discrete_experiment = MapfConfig(;
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     return experiment, discrete_experiment
@@ -344,16 +356,87 @@ function circular_ladder_pass(a::Int; edge_break::Int=1, shift::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
+    for v in vertices(discrete_network)
+        add_edge!(discrete_network, v, v)
+    end
 
     discrete_experiment = MapfConfig(;
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_cost=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray(1.0),
+    )
+
+    return experiment, discrete_experiment
+end
+
+"""
+    pp_infeasible_case(a; edge_break)
+Create a network with a star-like topology. Each branch has exactly two vertices.
+There is also a buffer vertex attached only to the middle vertex.
+Every agent starts from the vertex closer to the center and tries to reach
+the vertex at the back of another agent. Prioritized planning can not find any
+feasible solution regardless of the order. Only even number of agents is meaningful.
+Odd number of agents leads to one redundant path.
+
+The generated network has |V| = 2*(a+1) and |E| = 6*a + 4
+
+# Arguments
+- `a::Int`: Number of agents
+
+# Keyword arguments
+- `edge_break::Int`: break every edge into this number of sub-segments, self-loops
+are not effected, by default 1 (no break)
+"""
+function pp_infeasible_case(a::Int; edge_break::Int=1)
+    base_network = DiGraph(2 * (a + 1))
+    n = nv(base_network)
+    for v in 1:a
+        add_edge!(base_network, v, v + a)
+        add_edge!(base_network, v + a, v)
+
+        add_edge!(base_network, v, n - 1)
+        add_edge!(base_network, n - 1, v)
+    end
+
+    add_edge!(base_network, n - 1, n)
+    add_edge!(base_network, n, n - 1)
+
+    source_vertices = Vector{Int}(1:a)
+    # target_vertices = circshift(a+1:2*a, 1)
+    target_vertices = Vector{Int}(2*a:-1:a+1)
+
+    edge_costs = DynamicDimensionArray(1.0)
+
+    exp_network = deepcopy(base_network)
+
+    # Self loops
+    for v in vertices(base_network)
+        add_edge!(exp_network, v, v)
+        edge_costs[v, v] = 0.5
+    end
+
+    experiment = MapfConfig(;
+        network=exp_network,
+        source_vertices=source_vertices,
+        target_vertices=target_vertices,
+        edge_costs=DynamicDimensionArray(1.0),
+    )
+
+    discrete_network = break_segments(base_network, edge_break)
+    for v in vertices(discrete_network)
+        add_edge!(discrete_network, v, v)
+    end
+
+    discrete_experiment = MapfConfig(;
+        network=discrete_network,
+        source_vertices=source_vertices,
+        target_vertices=target_vertices,
+        edge_costs=DynamicDimensionArray(1.0),
     )
 
     return experiment, discrete_experiment
