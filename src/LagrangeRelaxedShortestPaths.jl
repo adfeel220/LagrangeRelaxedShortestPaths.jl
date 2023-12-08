@@ -10,11 +10,11 @@ using Random: Xoshiro, default_rng, rand
 import DataStructures: sorted_rank, delete!
 
 export DimensionFreeData, DynamicDimensionArray
-export shortest_paths, astar, temporal_astar, dijkstra
+export shortest_paths, astar, temporal_astar, dijkstra, prioritized_planning
 export detect_vertex_conflict, detect_edge_conflict, is_feasible
 export lagrange_relaxed_shortest_path
-export prioritized_planning
 export AdamOptimizer, SimpleGradientOptimizer
+export MapfConfig
 
 export nagents
 export parallel_lines,

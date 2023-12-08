@@ -104,7 +104,7 @@ end
 Return a new tuple without the leftmost element of the original tuple in a type stable method
 """
 function degenerate_tuple(t::NTuple{N,T})::NTuple{N - 1,T} where {N,T}
-    return ntuple(i -> t[i + 1], N - 1)
+    return @inbounds ntuple(i -> t[i + 1], N - 1)
 end
 
 function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where {T}

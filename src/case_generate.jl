@@ -407,8 +407,7 @@ function pp_infeasible_case(a::Int; edge_break::Int=1)
     add_edge!(base_network, n, n - 1)
 
     source_vertices = Vector{Int}(1:a)
-    # target_vertices = circshift(a+1:2*a, 1)
-    target_vertices = Vector{Int}(2*a:-1:a+1)
+    target_vertices = Vector{Int}((2 * a):-1:(a + 1))
 
     edge_costs = DynamicDimensionArray(1.0)
 

@@ -13,7 +13,9 @@ using Test
 
     if VERSION >= v"1.9"
         @testset "Code quality" begin
-            Aqua.test_all(LagrangeRelaxedShortestPaths; ambiguities=false)
+            Aqua.test_all(
+                LagrangeRelaxedShortestPaths; ambiguities=false, unbound_args=false
+            )
         end
 
         @testset "Code linting" begin

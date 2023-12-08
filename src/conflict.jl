@@ -173,7 +173,6 @@ Return whether the conflict is conflict free
 """
 is_conflict_free(conflict::Dict)::Bool = length(conflict) == 0
 
-
 """
     is_feasible(paths; swap_conflict)
 Return whether the multi-agent paths are feasible. Checks whether
@@ -186,7 +185,9 @@ Return whether the multi-agent paths are feasible. Checks whether
 # Keyword arguments
 - `swap_conflict::Bool`: whether to detect swapping confliccts, by default `false`
 """
-function is_feasible(paths::Vector{TimedPath{T,V}}; swap_conflict::Bool=false)::Bool where {T,V}
+function is_feasible(
+    paths::Vector{TimedPath{T,V}}; swap_conflict::Bool=false
+)::Bool where {T,V}
     if any(isempty.(paths))
         return false
     end
