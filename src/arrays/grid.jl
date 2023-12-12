@@ -1,9 +1,8 @@
 
 """
-    DynamicDimensionArray2to4{T}
+    DynamicDimensionGridArray{T}
 A dimension free array in which overindexing is allowed. No out of bound error for this array.
-An special optimized version that only allows index to have length 2-4, as generic implementation generates
-instable type that slows down computation.
+An special optimized version that is based on a grid and has index only 2-4.
 
 Implemented for fast searching and single entity modification, not suitable for vectorized computation
 The indexing of this array follows the rules below:
@@ -12,35 +11,57 @@ The indexing of this array follows the rules below:
 while `arr[1,2,3]` doesn't exist but `arr[2,3]` exists, return `arr[2,3]`
 3. If non of the degenerated indices exists, return the default value.
 """
-mutable struct DynamicDimensionArray2to4{T} <: AbstractDynamicDimensionArray{T}
+mutable struct DynamicDimensionGridArray{T} <: AbstractDynamicDimensionArray{T}
     d2::AVLTree{DimensionFreeData{T,2}}
     d3::AVLTree{DimensionFreeData{T,3}}
     d4::AVLTree{DimensionFreeData{T,4}}
 
     default::T
+    grid_size::NTuple{2,Int}
 end
 
-Base.length(arr::DynamicDimensionArray2to4) = length(arr.d2) + length(arr.d3) + length(arr.d4)
+function Base.length(arr::DynamicDimensionGridArray)
+    return length(arr.d2) + length(arr.d3) + length(arr.d4)
+end
+Base.size(arr::DynamicDimensionGridArray) = arr.grid_size
 
-function Base.show(io::IO, arr::DynamicDimensionArray2to4)
+function Base.show(io::IO, arr::DynamicDimensionGridArray)
     return show(
         io,
-        """DynamicDimensionArray2to4{$(typeof(arr.default))}: $(length(arr)) registered entries with default = $(arr.default).""",
+        """DynamicDimensionGridArray{$(typeof(arr.default))} on grid of size $(arr.grid_size): $(length(arr)) registered entries with default = $(arr.default).""",
     )
 end
 
 """
-    DynamicDimensionArray2to4([default=0.0])
-Create an empty `DynamicDimensionArray2to4` with a default value (`{Float64}(0.0)` if not specified).
+    DynamicDimensionGridArray(size[, default=1.0])
+Create an empty `DynamicDimensionGridArray` with a default value (`{Float64}(1.0)` if not specified).
 """
-function DynamicDimensionArray2to4(default::T=zero(Float64)) where {T <: Number}
+function DynamicDimensionGridArray(size::NTuple{2,Int}, default::T=one(Float64)) where {T}
     t2 = AVLTree{DimensionFreeData{T,2}}()
     t3 = AVLTree{DimensionFreeData{T,3}}()
     t4 = AVLTree{DimensionFreeData{T,4}}()
-    return DynamicDimensionArray2to4{T}(t2, t3, t4, default)
+    return DynamicDimensionGridArray{T}(t2, t3, t4, default, size)
 end
 
-function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int}) where {T}
+"""
+    vertex_to_coordinate(arr, v)
+Compute the coordinate from a vertex index `v` based on the grid size stored in `arr`
+"""
+function vertex_to_coordinate(arr::DynamicDimensionGridArray, v::Int)
+    return (v - 1) ÷ arr.grid_size[1] + 1, (v - 1) % arr.grid_size[1] + 1
+end
+
+"""
+    euclidean_distance(arr, v1, v2)
+Compute the euclidean distance between `v1` and `v2` on the grid of `arr`, measured by number of blocks
+"""
+function euclidean_distance(arr::DynamicDimensionGridArray, v1::Int, v2::Int)
+    coord1 = vertex_to_coordinate(arr, v1)
+    coord2 = vertex_to_coordinate(arr, v2)
+    return √sum((coord1 .- coord2) .^ 2)
+end
+
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int}) where {T}
     if length(index) > 4
         index = index[(end - 3):end]
     end
@@ -64,10 +85,11 @@ function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int}) wh
             return data
         end
     end
-    return arr.default
+
+    return arr.default * euclidean_distance(arr, index[1], index[2])
 end
 function Base.setindex!(
-    arr::DynamicDimensionArray2to4{T}, value::T, index::Vararg{Int}
+    arr::DynamicDimensionGridArray{T}, value::T, index::Vararg{Int}
 ) where {T}
     if length(index) == 4
         set_data!(arr.d4, value, index)
@@ -79,7 +101,7 @@ function Base.setindex!(
     return arr
 end
 
-function Base.iterate(arr::DynamicDimensionArray2to4{T}, i=1) where {T}
+function Base.iterate(arr::DynamicDimensionGridArray{T}, i=1) where {T}
     if i > length(arr)
         return nothing
     end
@@ -97,15 +119,15 @@ function Base.iterate(arr::DynamicDimensionArray2to4{T}, i=1) where {T}
     end
 end
 
-function empty(arr::DynamicDimensionArray2to4{T}) where {T}
-    return DynamicDimensionArray2to4(arr.default)
+function empty(arr::DynamicDimensionGridArray{T}) where {T}
+    return DynamicDimensionGridArray(arr.grid_size, arr.default)
 end
 
 """
     delete!(arr, index)
 Delete the node with `index` in `arr`
 """
-function delete!(arr::DynamicDimensionArray2to4{T}, index::NTuple{N,Int}) where {T,N}
+function delete!(arr::DynamicDimensionGridArray{T}, index::NTuple{N,Int}) where {T,N}
     if length(index) == 4
         delete!(arr.d4, DimensionFreeData{T}(index))
     elseif length(index) == 3

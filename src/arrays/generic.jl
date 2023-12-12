@@ -10,7 +10,7 @@ The indexing of this array follows the rules below:
 while `arr[1,2,3]` doesn't exist but `arr[2,3]` exists, return `arr[2,3]`
 3. If non of the degenerated indices exists, return the default value.
 """
-mutable struct DynamicDimensionArray{T}
+mutable struct DynamicDimensionArray{T} <: AbstractDynamicDimensionArray{T}
     data::AVLTree{DimensionFreeData}
     default::T
 end
@@ -45,6 +45,68 @@ function DynamicDimensionArray{T}(
     return DynamicDimensionArray{T}(tree, default)
 end
 
+"""
+    find_node(tree, index)
+Return node on an `AVLTree` with given index, return `nothing` if such index is not found
+
+# Arguments
+- `tree::AVLTree{DimensionFreeData}`: AVL tree storing data by index
+- `index`: index of data to be retrieved
+"""
+function find_node(tree::AVLTree{DimensionFreeData}, index)
+    prev = nothing
+    node = tree.root
+    while !isnothing(node) && node.data.index != index
+        prev = node
+        if index < node.data.index
+            node = node.leftChild
+        else
+            node = node.rightChild
+        end
+    end
+
+    if !isnothing(node)
+        return node
+    end
+    return nothing
+end
+
+"""
+    find_data(tree, index)
+Return data value of a given index, return `nothing` if such index not found
+
+# Arguments
+- `tree::AVLTree{DimensionFreeData}`: AVL tree storing data by index
+- `index`: index of data to be retrieved
+"""
+function find_data(tree::AVLTree{DimensionFreeData}, index)
+    node = find_node(tree, index)
+    if isnothing(node)
+        return nothing
+    end
+    return node.data.data
+end
+
+# FIXME: unable to convert a concrete type to an non-concrete type
+"""
+    set_data!(tree, value, index)
+Set `value` binded with `index` into the tree. Overwrite value for already existing index,
+create a new node otherwise.
+
+# Arguments
+- `tree::AVLTree{DimensionFreeData}`: AVL tree storing data by index
+- `value::T`: value to insert into the tree
+- `index`: index of data to be retrieved
+"""
+function set_data!(tree::AVLTree{DimensionFreeData}, value, index)
+    node = find_node(tree, index)
+    if isnothing(node)
+        push!(tree, DimensionFreeData(value, index))
+    else
+        node.data.data = value
+    end
+end
+
 function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where {T}
     data = find_data(arr.data, index)
     if isnothing(data)
@@ -59,9 +121,7 @@ function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where 
     end
     return data
 end
-function Base.setindex!(
-    arr::DynamicDimensionArray{T}, value::T, index::Vararg{Int}
-) where {T}
+function Base.setindex!(arr::DynamicDimensionArray{T}, value, index...) where {T}
     set_data!(arr.data, value, index)
     return arr
 end
@@ -73,6 +133,14 @@ function Base.iterate(arr::DynamicDimensionArray, i=1)
     return Pair(arr.data[i].index, arr.data[i].data), i + 1
 end
 
+function empty(arr::DynamicDimensionArray{T}) where {T}
+    return DynamicDimensionArray(arr.default)
+end
+
+"""
+    delete!(arr, index)
+Delete the node with `index` in `arr`
+"""
 function delete!(arr::DynamicDimensionArray{T}, index::NTuple{N,Int}) where {T,N}
     if length(index) == 4
         delete!(arr.d4, DimensionFreeData{T}(index))

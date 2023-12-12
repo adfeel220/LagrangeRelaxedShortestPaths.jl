@@ -7,18 +7,18 @@ rand_perturbation(val::T, perturbation::T=1e-3; rng=default_rng()) where {T} =
     val * (one(T) + perturbation * 2.0 * (rand(rng) - 0.5))
 
 """
-    Optimizer{T}
+    AbstractOptimizer{T}
 Abstract optimizer class, subtypes has to implement `step!(param, optimizer, gradient)`
 """
-abstract type Optimizer{T} end
-reset!(optimizer::Optimizer{T}) where {T} = optimizer
+abstract type AbstractOptimizer{T} end
+reset!(optimizer::AbstractOptimizer{T}) where {T} = optimizer
 
 """
-    AdamOptimizer{T} <: Optimizer{T}
+    AdamOptimizer{T} <: AbstractOptimizer{T}
 An Adam optimizer with default `α=0.001`, `β1=0.9`, `β2=0.999`, and `ϵ=1e-8`
 Supports initialization with `@kwdef`, by default utilizes `DynamicDimensionArray{T}`
 """
-@kwdef mutable struct AdamOptimizer{T} <: Optimizer{T}
+@kwdef mutable struct AdamOptimizer{T,A<:AbstractDynamicDimensionArray{T}} <: AbstractOptimizer{T}
     α::T = 0.001  # step size
     β1::T = 0.9   # decay parameter [0, 1)
     β2::T = 0.999 # decay parameter [0, 1)
@@ -26,8 +26,8 @@ Supports initialization with `@kwdef`, by default utilizes `DynamicDimensionArra
     β1_t::T = 1.0  # keep track of bias correcting term β1^t
     β2_t::T = 1.0  # keep track of bias correcting term β2^t
 
-    m::DynamicDimensionArray{T} = DynamicDimensionArray()   # 1st order momentum
-    v::DynamicDimensionArray{T} = DynamicDimensionArray()   # 2nd order momentum
+    m::A = DynamicDimensionArray2to4(zero(T))   # 1st order momentum
+    v::A = DynamicDimensionArray2to4(zero(T))   # 2nd order momentum
     ϵ::T = 1e-8  # smooth factor
 end
 
@@ -38,8 +38,8 @@ Reset the Adam optimzier to `t=0` and clear all 1st and 2nd momentum
 function reset!(optimizer::AdamOptimizer{T}) where {T}
     optimizer.β1_t = one(T)
     optimizer.β2_t = one(T)
-    optimizer.m = DynamicDimensionArray(zero(T))
-    optimizer.v = DynamicDimensionArray(zero(T))
+    optimizer.m = empty(optimizer.m)
+    optimizer.v = empty(optimizer.v)
 
     return optimizer
 end
@@ -49,21 +49,21 @@ end
 Update parameter in gradient ascend manner with Adam optimizer using a pre-computed gradient
 
 # Arguments
-- `param::DynamicDimensionArray{T}`: parameter to be updated
+- `param::A`: parameter to be updated
 - `adam::AdamOptimizer{T}`: adam optimizer
-- `grad::DynamicDimensionArray{T}`: gradient
+- `grad::A`: gradient
 
 # Keyword arguments
 - `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
 - `rng`: random generator, by default `default_rng()`
 """
 function step!(
-    param::DynamicDimensionArray{T},
+    param::A,
     adam::AdamOptimizer{T},
-    grad::DynamicDimensionArray{T};
+    grad::A;
     perturbation::T=1e-3,
     rng=default_rng(),
-) where {T}
+) where {T, A <: AbstractDynamicDimensionArray{T}}
     adam.β1_t *= adam.β1
     adam.β2_t *= adam.β2
 
@@ -86,11 +86,11 @@ function step!(
 end
 
 """
-    SimpleGradientOptimizer{T} <: Optimizer{T}
-An basic gradient optimizer with default `α=0.001`, `β1=0.9`, `β2=0.999`, and `ϵ=1e-8`
-Supports initialization with `@kwdef`, by default utilizes `DynamicDimensionArray{T}`
+    SimpleGradientOptimizer{T} <: AbstractOptimizer{T}
+An basic gradient optimizer with default step size `α=0.001`.
+Supports initialization with `@kwdef`
 """
-@kwdef mutable struct SimpleGradientOptimizer{T} <: Optimizer{T}
+@kwdef mutable struct SimpleGradientOptimizer{T} <: AbstractOptimizer{T}
     α::T = 0.001  # step size
 end
 
@@ -99,25 +99,64 @@ end
 Update parameter in gradient ascend manner with simple gradient optimizer using a pre-computed gradient
 
 # Arguments
-- `param::DynamicDimensionArray{T}`: parameter to be updated
+- `param::A`: parameter to be updated
 - `opt::SimpleGradientOptimizer{T}`: simple gradient optimizer
-- `grad::DynamicDimensionArray{T}`: gradient
+- `grad::A`: gradient
 
 # Keyword arguments
 - `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
 - `rng`: random generator, by default `default_rng()`
 """
 function step!(
-    param::DynamicDimensionArray{T},
+    param::A,
     opt::SimpleGradientOptimizer{T},
-    grad::DynamicDimensionArray{T};
+    grad::A;
     perturbation::T=1e-3,
     rng=default_rng(),
-) where {T}
+) where {T, A<:AbstractDynamicDimensionArray{T}}
     for (idx, grad_val) in grad
         update_val = max(zero(T), param[idx...] + opt.α * grad_val)
         param[idx...] = rand_perturbation(update_val, perturbation; rng)
     end
+    return param
+end
+
+"""
+    DecayGradientOptimizer{T} <: AbstractOptimizer{T}
+An basic gradient optimizer with default starting step size `α=1.0`
+Supports initialization with `@kwdef`
+"""
+@kwdef mutable struct DecayGradientOptimizer{T} <: AbstractOptimizer{T}
+    α::T = 1.0  # step size
+    decay_rate::T = 0.999  # decay rate
+    min_step_size::T = 1e-4  # minimum step size
+end
+"""
+    step!(param, opt, grad; perturbation, rng)
+Update parameter in gradient ascend manner with step size decaying gradient optimizer
+using a pre-computed gradient
+
+# Arguments
+- `param::A`: parameter to be updated
+- `opt::DecayGradientOptimizer{T}`: gradient optimizer with decaying step size
+- `grad::A`: gradient
+
+# Keyword arguments
+- `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
+- `rng`: random generator, by default `default_rng()`
+"""
+function step!(
+    param::A,
+    opt::DecayGradientOptimizer{T},
+    grad::A;
+    perturbation::T=1e-3,
+    rng=default_rng(),
+) where {T, A<:AbstractDynamicDimensionArray{T}}
+    for (idx, grad_val) in grad
+        update_val = max(zero(T), param[idx...] + opt.α * grad_val)
+        param[idx...] = rand_perturbation(update_val, perturbation; rng)
+    end
+    opt.α = max(opt.min_step_size, opt.α * opt.decay_rate)
     return param
 end
 
@@ -127,22 +166,23 @@ Compute gradient given the current conflict table of agents on the network.
 Only vertex and edge conflicts (potential swapping conflicts) are considered.
 
 # Arguments
-- `multiplier::DynamicDimensionArray{C}`: Lagrange multiplier with type of cost `C`
+- `multiplier::AbstractDynamicDimensionArray{C}`: Lagrange multiplier with type of cost `C`
 - `vertex_conflict::VertexConflicts{T,V,A}`: conflict table of vertices with type of time `T`,
 vertex `V`, agent `A`
 - `edge_conflict::EdgeConflicts{T,V,A}`: conflict table of edges with type of time `T`,
 vertex `V`, agent `A`
 """
 function compute_gradient(
-    multiplier::DynamicDimensionArray{C},
+    multiplier::AbstractDynamicDimensionArray{C},
     vertex_conflicts::VertexConflicts{T,V,A},
     edge_conflicts::EdgeConflicts{T,V,A},
+    num_agents::Int,
 ) where {C,T,V,A}
-    grad = DynamicDimensionArray(zero(C))
+    grad = empty(multiplier)
     # vertex conflicts
     for ((timestamp, vertex), agents) in vertex_conflicts
         # Multiple agents occupies, contains conflict
-        violation = length(agents) - one(C)
+        violation = (length(agents) - one(C)) / (num_agents - one(C))
         for (ag, from_v) in agents
             grad[timestamp, ag, from_v, vertex] = violation
         end
@@ -151,13 +191,26 @@ function compute_gradient(
     # edge conflicts
     for ((timestamp, from_v, to_v), agents) in edge_conflicts
         # Multiple agents occupies, contains conflict
-        violation = length(agents) - one(C)
+        violation = (length(agents) - one(C)) / (num_agents - one(C))
         for (ag, is_flip) in agents
             v1, v2 = is_flip ? (to_v, from_v) : (from_v, to_v)
             grad[timestamp, ag, v1, v2] += violation
         end
     end
 
+    return grad
+end
+
+"""
+"""
+function polyak_step!(grad::AbstractDynamicDimensionArray{C}, upper_bound::Vector{C}, current_val::Vector{C}) where {C}
+    for (index, grad_val) in grad
+        ag = index[2]
+        if upper_bound[ag] < current_val[ag]
+            continue
+        end
+        grad[index...] *= (upper_bound[ag] - current_val[ag])
+    end
     return grad
 end
 
@@ -180,14 +233,20 @@ vertex `V`, agent `A`
 - `rng`: random generator, by default `default_rng()`
 """
 function update_multiplier!(
-    multiplier::DynamicDimensionArray{C},
-    optimizer::Optimizer{C},
+    multiplier::AbstractDynamicDimensionArray{C},
+    optimizer::AbstractOptimizer{C},
     vertex_conflicts::VertexConflicts{T,V,A},
-    edge_conflicts::EdgeConflicts{T,V,A};
+    edge_conflicts::EdgeConflicts{T,V,A},
+    num_agents::Int;
     perturbation::C=1e-3,
     rng=default_rng(),
+    upper_bound::Vector{C}=Vector{C}(),
+    current_val::Vector{C}=Vector{C}(),
 ) where {C,T,V,A}
-    grad = compute_gradient(multiplier, vertex_conflicts, edge_conflicts)
+    grad = compute_gradient(multiplier, vertex_conflicts, edge_conflicts, num_agents)
+    # if !isempty(upper_bound) && !isempty(current_val)
+    #     polyak_step!(grad, upper_bound, current_val)
+    # end
     step!(multiplier, optimizer, grad; perturbation, rng)
 
     return grad

@@ -31,7 +31,7 @@ Parent node of
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `agent`: agent index
 - `source::V`: starting vertex of agent
 where `V` is the type of vertex and `C` is the type of cost
@@ -42,7 +42,7 @@ by default `false`
 """
 function dijkstra(
     network::AbstractGraph{V},
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::AbstractDynamicDimensionArray{C},
     agent,
     source::V;
     backwards::Bool=false,
@@ -96,7 +96,7 @@ Returns the path as a vector of vertices, return nothing if fail to find a solut
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `agent`: agent index
 - `source::V`: starting vertex of agent
 - `target::V`: target vertex for the agent to go to
@@ -109,7 +109,7 @@ i.e. h(n) ≤ d(n) always true for all n. By default always returns 0
 """
 function astar(
     network::AbstractGraph{V},
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::AbstractDynamicDimensionArray{C},
     agent,
     source::V,
     target::V;
@@ -162,7 +162,7 @@ Returns the path as a vector of time-expanded vertices, return nothing if fail t
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `agent`: agent index
 - `source::V`: starting vertex of agent
 - `target::V`: target vertex for the agent to go to
@@ -178,7 +178,7 @@ i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, s
 """
 function temporal_astar(
     network::AbstractGraph{V},
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::AbstractDynamicDimensionArray{C},
     agent,
     source::V,
     target::V,
@@ -263,7 +263,7 @@ Apply A* for all the agents in parallel. Returns the paths and costs of individu
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `sources::Vector{V}`: starting vertices of agents
 - `targets::Vector{V}`: target vertices for the agents to go to
 - `departure_times`: time when agents start traveling
@@ -278,7 +278,7 @@ i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, s
 """
 function shortest_paths(
     network::AbstractGraph{V},
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::AbstractDynamicDimensionArray{C},
     sources::Vector{V},
     targets::Vector{V},
     departure_times::Vector{T}=zeros(Int, length(sources));

@@ -4,15 +4,13 @@
 Compute the modified cost function based on the Lagrange multiplier
 
 # Arguments
-- `origin_cost::DynamicDimensionArray{C}`: original network edge cost, indexed by (time, agent, from-v, to-v)
-- `cost::DynamicDimensionArray{C}`: modified cost, indexed by (time, agent, from-v, to-v)
-- `multiplier::DynamicDimensionArray{C}`: Lagrange multiplier, indexed by (time, agent, from-v, to-v)
+- `origin_cost::CA`: original network edge cost, indexed by (time, agent, from-v, to-v)
+- `cost::CA`: modified cost, indexed by (time, agent, from-v, to-v)
+- `multiplier::CA`: Lagrange multiplier, indexed by (time, agent, from-v, to-v)
 """
 function update_cost!(
-    origin_cost::DynamicDimensionArray{C},
-    cost::DynamicDimensionArray{C},
-    multiplier::DynamicDimensionArray{C},
-) where {C}
+    origin_cost::CA, cost::CA, multiplier::CA
+) where {CA<:AbstractDynamicDimensionArray}
     for (idx, val) in multiplier
         cost[idx...] = origin_cost[idx...] + val
     end
@@ -26,18 +24,21 @@ Compute the cost of each path with a reference edge cost table
 # Arguments
 - `paths::Vector{TimedPath{T,V}}`: path as a sequence of time-expanded vertices of every agent.
 `T` is type of time and `V` is type of vertex
-- `edge_costs::DynamicDimensionArray{C}`: cost to traverse an edge indexed by (time, agent, from-v, to-v),
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost to traverse an edge indexed by (time, agent, from-v, to-v),
 where the time of edge traversal is aligned with the arriving vertex
 """
 function compute_scores(
-    paths::Vector{TimedPath{T,V}}, edge_costs::DynamicDimensionArray{C}
+    paths::Vector{TimedPath{T,V}}, edge_costs::AbstractDynamicDimensionArray{C}
 ) where {T,V,C}
     return [
-        sum(
-            edge_costs[t2, ag, v1, v2] for ((t1, v1), (t2, v2)) in
-            zip(agent_path[begin:(end - 1)], agent_path[(begin + 1):end]);
-            init=typemax(C),
-        ) for (ag, agent_path) in enumerate(paths)
+        if isempty(agent_path)
+            typemax(C)
+        else
+            sum(
+                edge_costs[t2, ag, v1, v2] for ((t1, v1), (t2, v2)) in
+                zip(agent_path[begin:(end - 1)], agent_path[(begin + 1):end]);
+            )
+        end for (ag, agent_path) in enumerate(paths)
     ]
 end
 
@@ -53,7 +54,7 @@ modified based on Lagrange relaxation.
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `sources_vertices`: starting vertices of agents
 - `targets_vertices`: target vertices for the agents to go to
 - `departure_times`: time when agents start traveling
@@ -77,7 +78,7 @@ by default `1e-3` (update value in ratio 1±0.001)
 """
 function lagrange_relaxed_shortest_path(
     network::AbstractGraph,
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::A,
     source_vertices,
     target_vertices,
     departure_times=zeros(Int, length(source_vertices)),
@@ -87,17 +88,17 @@ function lagrange_relaxed_shortest_path(
     astar_max_iter::Int=typemax(Int),
     lagrange_max_iter::Int=typemax(Int),
     hard_timeout::Float64=Inf,
-    optimizer::Optimizer{C}=AdamOptimizer{C}(;
-        α=1e-2 * minimum(x -> x.second, edge_costs; init=edge_costs.default)
+    optimizer::AbstractOptimizer{C}=SimpleGradientOptimizer{C}(;
+        α=1e-1 * minimum(x -> x.second, edge_costs; init=edge_costs.default)
     ),  # default step size as 1% of minimum cost
-    perturbation::C=1e-3,
+    perturbation::C=1e-6,
     rng_seed=nothing,
     multi_threads::Bool=true,
     silent::Bool=true,
-) where {C}
+) where {C,A<:AbstractDynamicDimensionArray{C}}
     global_timer = time()
 
-    multiplier = DynamicDimensionArray(zero(C))
+    multiplier = empty(edge_costs)
     cost = deepcopy(edge_costs)  # modified cost
     reset!(optimizer)
     rng = isnothing(rng_seed) ? Xoshiro() : Xoshiro(rng_seed)
@@ -141,7 +142,13 @@ function lagrange_relaxed_shortest_path(
         end
 
         update_multiplier!(
-            multiplier, optimizer, vertex_conflicts, edge_conflicts; perturbation, rng
+            multiplier,
+            optimizer,
+            vertex_conflicts,
+            edge_conflicts,
+            length(source_vertices);
+            perturbation,
+            rng,
         )
 
         iter += 1

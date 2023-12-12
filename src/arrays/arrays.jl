@@ -8,9 +8,10 @@ Overloads `sorted_rank` for `AVLTree{DimensionFreeData}` to use `Tuple` or `Vara
 mutable struct DimensionFreeData{T,N}
     data::T
     index::NTuple{N,Int}
-end
-function DimensionFreeData{T}(index::NTuple{N,Int}) where {N,T}
-    return DimensionFreeData{T,N}(zero(T), index)
+
+    function DimensionFreeData(data::T, index::NTuple{N,Int}) where {N,T}
+        return new{T,N}(data, index)
+    end
 end
 function Base.show(io::IO, data::DimensionFreeData)
     return show(io, "DimensionFreeData: Value $(data.data) indexed by $(data.index)")
@@ -25,9 +26,9 @@ Return node on an `AVLTree` with given index, return `nothing` if such index is 
 
 # Arguments
 - `tree::AVLTree{DimensionFreeData{T,N}}`: AVL tree storing data by index
-- `index::NTuple{N}`: index of data to be retrieved
+- `index::NTuple{N,Int}`: index of data to be retrieved
 """
-function find_node(tree::AVLTree{DimensionFreeData{T,N}}, index::NTuple{N}) where {T,N}
+function find_node(tree::AVLTree{DimensionFreeData{T,N}}, index::NTuple{N,Int}) where {T,N}
     prev = nothing
     node = tree.root
     while !isnothing(node) && node.data.index != index
@@ -51,7 +52,7 @@ Return data value of a given index, return `nothing` if such index not found
 
 # Arguments
 - `tree::AVLTree{DimensionFreeData{T,N}}`: AVL tree storing data by index
-- `index::NTuple{N}`: index of data to be retrieved
+- `index::NTuple{N,Int}`: index of data to be retrieved
 """
 function find_data(tree::AVLTree{DimensionFreeData{T,N}}, index::NTuple{N,Int}) where {T,N}
     node = find_node(tree, index)
@@ -69,14 +70,14 @@ create a new node otherwise.
 # Arguments
 - `tree::AVLTree{DimensionFreeData{T,N}}`: AVL tree storing data by index
 - `value::T`: value to insert into the tree
-- `index::NTuple{N}`: index of data to be retrieved
+- `index::NTuple{N,Int}`: index of data to be retrieved
 """
 function set_data!(
-    tree::AVLTree{DimensionFreeData}, value::T, index::NTuple{N,Int}
+    tree::AVLTree{DimensionFreeData{T,N}}, value::T, index::NTuple{N,Int}
 ) where {N,T}
     node = find_node(tree, index)
     if isnothing(node)
-        insert!(tree, DimensionFreeData{T,N}(value, index))
+        push!(tree, DimensionFreeData(value, index))
     else
         node.data.data = value
     end
@@ -92,4 +93,12 @@ function Base.show(io::IO, arr::AbstractDynamicDimensionArray)
     return show(
         io, "DynamicDimensionArray{$(typeof(arr.default))} with default = $(arr.default)"
     )
+end
+
+"""
+    degenerate_tuple(t)
+Return a new tuple without the leftmost element of the original tuple in a type stable method
+"""
+function degenerate_tuple(t::NTuple{N,T})::NTuple{N - 1,T} where {N,T}
+    return @inbounds ntuple(i -> t[i + 1], N - 1)
 end
