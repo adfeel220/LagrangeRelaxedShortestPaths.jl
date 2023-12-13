@@ -121,7 +121,7 @@ function Base.iterate(arr::DynamicDimensionGridArray{T}, i=1) where {T}
 end
 
 function empty(arr::DynamicDimensionGridArray{T}) where {T}
-    return DynamicDimensionGridArray(arr.grid_size, arr.default)
+    return DynamicDimensionGridArray(arr.grid_size; default=arr.default, min_val=arr.default)
 end
 
 """
