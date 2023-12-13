@@ -153,6 +153,46 @@ function astar(
 end
 
 """
+    resolve_heuristic(heuristic, network, agent, target, edge_costs)
+Resolve the heuristic so that the output is a function which maps a vertex `v` to a
+heuristic value.
+"""
+function resolve_heuristic(
+    heuristic::Union{Symbol,Function,Number},
+    network::AbstractGraph{V},
+    agent,
+    target::V,
+    edge_costs::AbstractDynamicDimensionArray,
+) where {V}
+    # Direct return if heuristic is already a function
+    if isa(heuristic, Function)
+        return heuristic
+    end
+
+    # Lazy heuristic of always return a humber
+    if isa(heuristic, Number)
+        return (v -> heuristic)
+    end
+
+    # Symbol for special cases
+    if heuristic == :dijkstra
+        dijkstra_scores, _ = dijkstra(network, edge_costs, agent, target; backwards=true)
+        heuristic = (v -> dijkstra_scores[v])
+
+    elseif heuristic == :euclidean
+        heuristic = (v -> euclidean_distance(edge_costs, v, target))
+
+    elseif heuristic == :lazy
+        heuristic = (v -> zero(C))
+
+    else
+        error("Unrecognized heuristic symbol $heuristic")
+    end
+
+    return heuristic
+end
+
+"""
     temporal_astar(
         network, edge_costs, agent, source, target, departure_time;
         heuristic, max_iter
@@ -188,19 +228,8 @@ function temporal_astar(
     heuristic::Union{Symbol,Function}=:dijkstra,
     max_iter::Int=typemax(Int),
 ) where {V,T<:Integer,C}
-    # Resolve heuristic
-    if isa(heuristic, Symbol)
-        if heuristic == :dijkstra
-            dijkstra_scores, _ = dijkstra(
-                network, edge_costs, agent, target; backwards=true
-            )
-            heuristic = (v -> dijkstra_scores[v])
-        elseif heuristic == :lazy
-            heuristic = (v -> zero(C))
-        else
-            error("Unrecognized heuristic symbol $heuristic")
-        end
-    end
+    # Resolve heuristic, after resolving heuristic can only be a function
+    heuristic = resolve_heuristic(heuristic, network, agent, target, edge_costs)
 
     # set of candidate nodes to be explored, use heap to retrieve minimum cost
     # node in constant time

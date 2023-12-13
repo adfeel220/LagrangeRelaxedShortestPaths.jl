@@ -18,6 +18,7 @@ mutable struct DynamicDimensionGridArray{T} <: AbstractDynamicDimensionArray{T}
 
     default::T
     grid_size::NTuple{2,Int}
+    min_val::T
 end
 
 function Base.length(arr::DynamicDimensionGridArray)
@@ -36,11 +37,11 @@ end
     DynamicDimensionGridArray(size[, default=1.0])
 Create an empty `DynamicDimensionGridArray` with a default value (`{Float64}(1.0)` if not specified).
 """
-function DynamicDimensionGridArray(size::NTuple{2,Int}, default::T=one(Float64)) where {T}
+function DynamicDimensionGridArray(size::NTuple{2,Int}; default::T=one(Float64), min_val::T=0.1*default) where {T}
     t2 = AVLTree{DimensionFreeData{T,2}}()
     t3 = AVLTree{DimensionFreeData{T,3}}()
     t4 = AVLTree{DimensionFreeData{T,4}}()
-    return DynamicDimensionGridArray{T}(t2, t3, t4, default, size)
+    return DynamicDimensionGridArray{T}(t2, t3, t4, default, size, min_val)
 end
 
 """
@@ -86,7 +87,7 @@ function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int}) wh
         end
     end
 
-    return arr.default * euclidean_distance(arr, index[1], index[2])
+    return max(arr.min_val, arr.default * euclidean_distance(arr, index[1], index[2]))
 end
 function Base.setindex!(
     arr::DynamicDimensionGridArray{T}, value::T, index::Vararg{Int}
