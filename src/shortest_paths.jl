@@ -154,39 +154,41 @@ end
 
 """
     resolve_heuristic(heuristic, network, agent, target, edge_costs)
-Resolve the heuristic so that the output is a function which maps a vertex `v` to a
-heuristic value.
+Resolve the heuristic so that the output is a function which maps a vertex `v` to a heuristic value.
+
+It takes several cases:
+- `Function`: Directly return the same function
+- `Symbol`: either `:dijkstra`, `:euclidean`, or `:lazy`
 """
 function resolve_heuristic(
-    heuristic::Union{Symbol,Function,Number},
+    heuristic::Union{Symbol,Function},
     network::AbstractGraph{V},
     agent,
     target::V,
-    edge_costs::AbstractDynamicDimensionArray,
-) where {V}
+    edge_costs::AbstractDynamicDimensionArray{C},
+)::Function where {V,C}
     # Direct return if heuristic is already a function
     if isa(heuristic, Function)
         return heuristic
     end
 
-    # Lazy heuristic of always return a humber
-    if isa(heuristic, Number)
-        return (v -> heuristic)
-    end
-
     # Symbol for special cases
+    # backward Dijkstra from the target point
     if heuristic == :dijkstra
         dijkstra_scores, _ = dijkstra(network, edge_costs, agent, target; backwards=true)
         heuristic = (v -> dijkstra_scores[v])
 
+        # Euclidean distance between vertex to target
     elseif heuristic == :euclidean
+        !isa(edge_costs, DynamicDimensionGridArray) &&
+            error("Euclidean heuristic only available when using grid edge cost")
         heuristic = (v -> euclidean_distance(edge_costs, v, target))
 
     elseif heuristic == :lazy
         heuristic = (v -> zero(C))
 
     else
-        error("Unrecognized heuristic symbol $heuristic")
+        @warn("Unrecognized heuristic symbol $heuristic, use lazy heuristic instead")
     end
 
     return heuristic
