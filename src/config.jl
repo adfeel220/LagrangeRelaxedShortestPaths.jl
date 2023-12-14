@@ -4,7 +4,7 @@
 A structure to hold all necessary information for executing an MAPF solver
 `G`: type for graph, `T`: type for time; `V`: type for vertex; and `C`: type of cost
 """
-@kwdef mutable struct MapfConfig{V,G<:AbstractGraph{V},T,A <: AbstractDynamicDimensionArray}
+@kwdef mutable struct MapfConfig{V,G<:AbstractGraph{V},T,A<:AbstractDynamicDimensionArray}
     network::G
     source_vertices::Vector{V}
     target_vertices::Vector{V}

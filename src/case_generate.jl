@@ -56,7 +56,7 @@ function parallel_lines(a::Int; edge_break::Int=1)
         network=base_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     discrete_network = DiGraph(a * (edge_break + 1))
@@ -73,7 +73,7 @@ function parallel_lines(a::Int; edge_break::Int=1)
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     return experiment, discrete_experiment
@@ -113,7 +113,7 @@ function directional_star(a::Int; edge_break::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
@@ -125,7 +125,7 @@ function directional_star(a::Int; edge_break::Int=1)
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     return experiment, discrete_experiment
@@ -183,7 +183,7 @@ function grid_cross(row::Int, column::Int; edge_break::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
@@ -195,7 +195,7 @@ function grid_cross(row::Int, column::Int; edge_break::Int=1)
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     return experiment, discrete_experiment
@@ -237,7 +237,7 @@ function line_overlap(n::Int, a::Int; edge_break::Int=1, delayed_departure::Bool
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
         departure_time=departure_time,
     )
 
@@ -250,7 +250,7 @@ function line_overlap(n::Int, a::Int; edge_break::Int=1, delayed_departure::Bool
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
         departure_time=departure_time,
     )
 
@@ -292,7 +292,7 @@ function wheel_pass(a::Int; edge_break::Int=1, shift::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
@@ -304,7 +304,7 @@ function wheel_pass(a::Int; edge_break::Int=1, shift::Int=1)
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     return experiment, discrete_experiment
@@ -356,7 +356,7 @@ function circular_ladder_pass(a::Int; edge_break::Int=1, shift::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
@@ -368,7 +368,7 @@ function circular_ladder_pass(a::Int; edge_break::Int=1, shift::Int=1)
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     return experiment, discrete_experiment
@@ -409,7 +409,7 @@ function pp_infeasible_case(a::Int; edge_break::Int=1)
     source_vertices = Vector{Int}(1:a)
     target_vertices = Vector{Int}((2 * a):-1:(a + 1))
 
-    edge_costs = DynamicDimensionArray(1.0)
+    edge_costs = DynamicDimensionArray2to4(1.0)
 
     exp_network = deepcopy(base_network)
 
@@ -423,7 +423,7 @@ function pp_infeasible_case(a::Int; edge_break::Int=1)
         network=exp_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     discrete_network = break_segments(base_network, edge_break)
@@ -435,7 +435,7 @@ function pp_infeasible_case(a::Int; edge_break::Int=1)
         network=discrete_network,
         source_vertices=source_vertices,
         target_vertices=target_vertices,
-        edge_costs=DynamicDimensionArray(1.0),
+        edge_costs=DynamicDimensionArray2to4(1.0),
     )
 
     return experiment, discrete_experiment

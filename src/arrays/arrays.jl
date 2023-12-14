@@ -13,6 +13,9 @@ mutable struct DimensionFreeData{T,N}
         return new{T,N}(data, index)
     end
 end
+function DimensionFreeData{T}(index::NTuple{N,Int}) where {N,T}
+    return DimensionFreeData(zero(T), index)
+end
 function Base.show(io::IO, data::DimensionFreeData)
     return show(io, "DimensionFreeData: Value $(data.data) indexed by $(data.index)")
 end

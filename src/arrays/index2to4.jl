@@ -20,7 +20,9 @@ mutable struct DynamicDimensionArray2to4{T} <: AbstractDynamicDimensionArray{T}
     default::T
 end
 
-Base.length(arr::DynamicDimensionArray2to4) = length(arr.d2) + length(arr.d3) + length(arr.d4)
+function Base.length(arr::DynamicDimensionArray2to4)
+    return length(arr.d2) + length(arr.d3) + length(arr.d4)
+end
 
 function Base.show(io::IO, arr::DynamicDimensionArray2to4)
     return show(
@@ -33,47 +35,49 @@ end
     DynamicDimensionArray2to4([default=0.0])
 Create an empty `DynamicDimensionArray2to4` with a default value (`{Float64}(0.0)` if not specified).
 """
-function DynamicDimensionArray2to4(default::T=zero(Float64)) where {T <: Number}
+function DynamicDimensionArray2to4(default::T=zero(Float64)) where {T<:Number}
     t2 = AVLTree{DimensionFreeData{T,2}}()
     t3 = AVLTree{DimensionFreeData{T,3}}()
     t4 = AVLTree{DimensionFreeData{T,4}}()
     return DynamicDimensionArray2to4{T}(t2, t3, t4, default)
 end
 
-function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int}) where {T}
-    if length(index) > 4
-        index = index[(end - 3):end]
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int,4}) where {T}
+    data = find_data(arr.d4, index)
+    if !isnothing(data)
+        return data
     end
-    if length(index) == 4
-        data = find_data(arr.d4, index)
-        if !isnothing(data)
-            return data
-        end
-        index = degenerate_tuple(index)
+    return arr[degenerate_tuple(index)...]
+end
+
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int,3}) where {T}
+    data = find_data(arr.d3, index)
+    if !isnothing(data)
+        return data
     end
-    if length(index) == 3
-        data = find_data(arr.d3, index)
-        if !isnothing(data)
-            return data
-        end
-        index = degenerate_tuple(index)
-    end
-    if length(index) == 2
-        data = find_data(arr.d2, index)
-        if !isnothing(data)
-            return data
-        end
+    return arr[degenerate_tuple(index)...]
+end
+
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int,2}) where {T}
+    data = find_data(arr.d2, index)
+    if !isnothing(data)
+        return data
     end
     return arr.default
 end
+
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index...) where {T}
+    return arr.default
+end
+
 function Base.setindex!(
-    arr::DynamicDimensionArray2to4{T}, value::T, index::Vararg{Int}
-) where {T}
-    if length(index) == 4
+    arr::DynamicDimensionArray2to4{T}, value::T, index::Vararg{Int,N}
+) where {T,N}
+    if N == 4
         set_data!(arr.d4, value, index)
-    elseif length(index) == 3
+    elseif N == 3
         set_data!(arr.d3, value, index)
-    elseif length(index) == 2
+    elseif N == 2
         set_data!(arr.d2, value, index)
     end
     return arr
@@ -97,6 +101,10 @@ function Base.iterate(arr::DynamicDimensionArray2to4{T}, i=1) where {T}
     end
 end
 
+"""
+    empty(arr::DynamicDimensionArray)
+Create an empty array with the same default value as the input array
+"""
 function empty(arr::DynamicDimensionArray2to4{T}) where {T}
     return DynamicDimensionArray2to4(arr.default)
 end

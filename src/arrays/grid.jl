@@ -37,7 +37,9 @@ end
     DynamicDimensionGridArray(size[, default=1.0])
 Create an empty `DynamicDimensionGridArray` with a default value (`{Float64}(1.0)` if not specified).
 """
-function DynamicDimensionGridArray(size::NTuple{2,Int}; default::T=one(Float64), min_val::T=0.1*default) where {T}
+function DynamicDimensionGridArray(
+    size::NTuple{2,Int}; default::T=one(Float64), min_val::T=0.1 * default
+) where {T}
     t2 = AVLTree{DimensionFreeData{T,2}}()
     t3 = AVLTree{DimensionFreeData{T,3}}()
     t4 = AVLTree{DimensionFreeData{T,4}}()
@@ -62,41 +64,41 @@ function euclidean_distance(arr::DynamicDimensionGridArray, v1::Int, v2::Int)
     return √sum((coord1 .- coord2) .^ 2)
 end
 
-function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int}) where {T}
-    if length(index) > 4
-        index = index[(end - 3):end]
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,4}) where {T}
+    data = find_data(arr.d4, index)
+    if !isnothing(data)
+        return data
     end
-    if length(index) == 4
-        data = find_data(arr.d4, index)
-        if !isnothing(data)
-            return data
-        end
-        index = degenerate_tuple(index)
-    end
-    if length(index) == 3
-        data = find_data(arr.d3, index)
-        if !isnothing(data)
-            return data
-        end
-        index = degenerate_tuple(index)
-    end
-    if length(index) == 2
-        data = find_data(arr.d2, index)
-        if !isnothing(data)
-            return data
-        end
-    end
+    return arr[degenerate_tuple(index)...]
+end
 
-    return max(arr.min_val, arr.default * euclidean_distance(arr, index[1], index[2]))
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,3}) where {T}
+    data = find_data(arr.d3, index)
+    if !isnothing(data)
+        return data
+    end
+    return arr[degenerate_tuple(index)...]
+end
+
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,2}) where {T}
+    data = find_data(arr.d2, index)
+    if !isnothing(data)
+        return data
+    end
+    return arr.default
+end
+
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index...) where {T}
+    return arr.default
 end
 function Base.setindex!(
-    arr::DynamicDimensionGridArray{T}, value::T, index::Vararg{Int}
-) where {T}
-    if length(index) == 4
+    arr::DynamicDimensionGridArray{T}, value::T, index::Vararg{Int,N}
+) where {T,N}
+    if N == 4
         set_data!(arr.d4, value, index)
-    elseif length(index) == 3
+    elseif N == 3
         set_data!(arr.d3, value, index)
-    elseif length(index) == 2
+    elseif N == 2
         set_data!(arr.d2, value, index)
     end
     return arr
@@ -120,8 +122,14 @@ function Base.iterate(arr::DynamicDimensionGridArray{T}, i=1) where {T}
     end
 end
 
-function empty(arr::DynamicDimensionGridArray{T}) where {T}
-    return DynamicDimensionGridArray(arr.grid_size; default=arr.default, min_val=arr.default)
+"""
+    empty(arr::DynamicDimensionArray)
+Create an empty array with the same default and minimum value as the input array
+"""
+function empty(arr::DynamicDimensionGridArray)
+    return DynamicDimensionGridArray(
+        arr.grid_size; default=arr.default, min_val=arr.default
+    )
 end
 
 """
@@ -129,11 +137,11 @@ end
 Delete the node with `index` in `arr`
 """
 function delete!(arr::DynamicDimensionGridArray{T}, index::NTuple{N,Int}) where {T,N}
-    if length(index) == 4
+    if N == 4
         delete!(arr.d4, DimensionFreeData{T}(index))
-    elseif length(index) == 3
+    elseif N == 3
         delete!(arr.d3, DimensionFreeData{T}(index))
-    elseif length(index) == 2
+    elseif N == 2
         delete!(arr.d2, DimensionFreeData{T}(index))
     end
     return arr
