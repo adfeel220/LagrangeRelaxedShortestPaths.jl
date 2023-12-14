@@ -1,6 +1,6 @@
 module LagrangeRelaxedShortestPaths
 
-using DataStructures: AVLTree, BinaryHeap
+using DataStructures: AVLTree, BinaryHeap, FasterForward
 using DataStructures: push!, insert!
 using Graphs: AbstractGraph, DiGraph
 using Graphs: nv, ne, src, dst, vertices, edges, inneighbors, outneighbors

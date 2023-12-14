@@ -233,8 +233,9 @@ function temporal_astar(
 
     # set of candidate nodes to be explored, use heap to retrieve minimum cost
     # node in constant time
-    open_set = BinaryHeap(
-        Base.By(last), [Pair((departure_time, source), heuristic(source))]
+    open_set = BinaryHeap{Pair{Tuple{T,V},C}}(
+        Base.Order.By{typeof(last),FasterForward}(last, FasterForward()),
+        [Pair((departure_time, source), heuristic(source))],
     )
 
     # parents store the traversing relationship between the time-expanded vertices
