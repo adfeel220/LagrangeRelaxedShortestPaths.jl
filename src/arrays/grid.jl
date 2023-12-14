@@ -104,7 +104,7 @@ function Base.setindex!(
     return arr
 end
 
-function Base.iterate(arr::DynamicDimensionGridArray{T}, i=1) where {T}
+function Base.iterate(arr::DynamicDimensionGridArray{T}, i::K=1) where {T,K<:Integer}
     if i > length(arr)
         return nothing
     end

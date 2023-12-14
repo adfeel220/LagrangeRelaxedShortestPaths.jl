@@ -126,7 +126,7 @@ function Base.setindex!(arr::DynamicDimensionArray{T}, value, index...) where {T
     return arr
 end
 
-function Base.iterate(arr::DynamicDimensionArray, i=1)
+function Base.iterate(arr::DynamicDimensionArray, i::K=1) where {K<:Integer}
     if i > length(arr)
         return nothing
     end
@@ -142,11 +142,11 @@ end
 Delete the node with `index` in `arr`
 """
 function delete!(arr::DynamicDimensionArray{T}, index::NTuple{N,Int}) where {T,N}
-    if length(index) == 4
+    if N == 4
         delete!(arr.d4, DimensionFreeData{T}(index))
-    elseif length(index) == 3
+    elseif N == 3
         delete!(arr.d3, DimensionFreeData{T}(index))
-    elseif length(index) == 2
+    elseif N == 2
         delete!(arr.d2, DimensionFreeData{T}(index))
     end
     return arr
