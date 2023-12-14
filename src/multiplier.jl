@@ -18,7 +18,8 @@ reset!(optimizer::AbstractOptimizer{T}) where {T} = optimizer
 An Adam optimizer with default `α=0.001`, `β1=0.9`, `β2=0.999`, and `ϵ=1e-8`
 Supports initialization with `@kwdef`, by default utilizes `DynamicDimensionArray{T}`
 """
-@kwdef mutable struct AdamOptimizer{T,A<:AbstractDynamicDimensionArray{T}} <: AbstractOptimizer{T}
+@kwdef mutable struct AdamOptimizer{T,A<:AbstractDynamicDimensionArray} <:
+                      AbstractOptimizer{T}
     α::T = 0.001  # step size
     β1::T = 0.9   # decay parameter [0, 1)
     β2::T = 0.999 # decay parameter [0, 1)
@@ -26,9 +27,12 @@ Supports initialization with `@kwdef`, by default utilizes `DynamicDimensionArra
     β1_t::T = 1.0  # keep track of bias correcting term β1^t
     β2_t::T = 1.0  # keep track of bias correcting term β2^t
 
-    m::A = DynamicDimensionArray2to4(zero(T))   # 1st order momentum
-    v::A = DynamicDimensionArray2to4(zero(T))   # 2nd order momentum
+    m::A = DynamicDimensionArray2to4()   # 1st order momentum
+    v::A = DynamicDimensionArray2to4()   # 2nd order momentum
     ϵ::T = 1e-8  # smooth factor
+end
+function AdamOptimizer(step_size::T) where {T}
+    return AdamOptimizer{T,DynamicDimensionArray2to4{T}}(; α=step_size)
 end
 
 """
@@ -58,12 +62,8 @@ Update parameter in gradient ascend manner with Adam optimizer using a pre-compu
 - `rng`: random generator, by default `default_rng()`
 """
 function step!(
-    param::A,
-    adam::AdamOptimizer{T},
-    grad::A;
-    perturbation::T=1e-3,
-    rng=default_rng(),
-) where {T, A <: AbstractDynamicDimensionArray{T}}
+    param::A, adam::AdamOptimizer{T}, grad::A; perturbation::T=1e-3, rng=default_rng()
+) where {T,A<:AbstractDynamicDimensionArray{T}}
     adam.β1_t *= adam.β1
     adam.β2_t *= adam.β2
 
@@ -113,7 +113,7 @@ function step!(
     grad::A;
     perturbation::T=1e-3,
     rng=default_rng(),
-) where {T, A<:AbstractDynamicDimensionArray{T}}
+) where {T,A<:AbstractDynamicDimensionArray{T}}
     for (idx, grad_val) in grad
         update_val = max(zero(T), param[idx...] + opt.α * grad_val)
         param[idx...] = rand_perturbation(update_val, perturbation; rng)
@@ -130,6 +130,9 @@ Supports initialization with `@kwdef`
     α::T = 1.0  # step size
     decay_rate::T = 0.999  # decay rate
     min_step_size::T = 1e-4  # minimum step size
+end
+function DecayGradientOptimizer(step_size::T) where {T}
+    return DecayGradientOptimizer{T}(; α=step_size)
 end
 """
     step!(param, opt, grad; perturbation, rng)
@@ -151,7 +154,7 @@ function step!(
     grad::A;
     perturbation::T=1e-3,
     rng=default_rng(),
-) where {T, A<:AbstractDynamicDimensionArray{T}}
+) where {T,A<:AbstractDynamicDimensionArray{T}}
     for (idx, grad_val) in grad
         update_val = max(zero(T), param[idx...] + opt.α * grad_val)
         param[idx...] = rand_perturbation(update_val, perturbation; rng)
@@ -203,7 +206,9 @@ end
 
 """
 """
-function polyak_step!(grad::AbstractDynamicDimensionArray{C}, upper_bound::Vector{C}, current_val::Vector{C}) where {C}
+function polyak_step!(
+    grad::AbstractDynamicDimensionArray{C}, upper_bound::Vector{C}, current_val::Vector{C}
+) where {C}
     for (index, grad_val) in grad
         ag = index[2]
         if upper_bound[ag] < current_val[ag]
