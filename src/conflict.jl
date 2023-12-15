@@ -138,7 +138,7 @@ function detect_edge_occupancy(
 end
 
 """
-    detect_edge_conflict(timed_paths[, capacity]; return_first)
+    detect_edge_conflict(timed_paths[, capacity]; swap, return_first)
 Detect edge conflicts given the timed paths of all agents
 
 # Arguments
@@ -172,3 +172,30 @@ n_conflicts(conflict::Dict)::Int = length(conflict)
 Return whether the conflict is conflict free
 """
 is_conflict_free(conflict::Dict)::Bool = length(conflict) == 0
+
+"""
+    is_feasible(paths; swap_conflict)
+Return whether the multi-agent paths are feasible. Checks whether
+1. any path is empty
+2. still contains any conflict
+
+# Arguments
+- `paths::Vector{TimedPath{T,V}}`: Paths as sequence of time-expanded vertices for every agent
+
+# Keyword arguments
+- `swap_conflict::Bool`: whether to detect swapping confliccts, by default `false`
+"""
+function is_feasible(
+    paths::Vector{TimedPath{T,V}}; swap_conflict::Bool=false
+)::Bool where {T,V}
+    if any(isempty.(paths))
+        return false
+    end
+    if !is_conflict_free(detect_vertex_conflict(paths; return_first=true))
+        return false
+    end
+    if !is_conflict_free(detect_edge_conflict(paths; swap=swap_conflict, return_first=true))
+        return false
+    end
+    return true
+end

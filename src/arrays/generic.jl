@@ -1,64 +1,5 @@
 
 """
-    DimensionFreeData{N,T}
-A data of type `T` labeled by index as an `NTuple{N, Int}`.
-Overloads `isless` and `==` for that the comparison is only the index.
-Overloads `sorted_rank` for `AVLTree{DimensionFreeData}` to use `Tuple` or `Vararg` to index `DimensionFreeData`
-"""
-mutable struct DimensionFreeData{T,N}
-    data::T
-    index::NTuple{N,Int}
-end
-function DimensionFreeData{T}(index::NTuple{N,Int}) where {N,T}
-    return DimensionFreeData{T,N}(zero(T), index)
-end
-function Base.show(io::IO, data::DimensionFreeData)
-    return show(io, "DimensionFreeData: Value $(data.data) indexed by $(data.index)")
-end
-Base.isless(d1::DimensionFreeData, d2::DimensionFreeData) = d1.index < d2.index
-Base.:(==)(d1::DimensionFreeData, d2::DimensionFreeData) = d1.index == d2.index
-Base.:(==)(d::DimensionFreeData, idx::Vararg) = d.index == idx
-
-"""
-    find_node(tree, index)
-Find node on an AVLTree storing DimensionFreeData with given index
-"""
-function find_node(tree::AVLTree{DimensionFreeData}, index::NTuple{N,Int}) where {N}
-    prev = nothing
-    node = tree.root
-    while !isnothing(node) && node.data.index != index
-        prev = node
-        if index < node.data.index
-            node = node.leftChild
-        else
-            node = node.rightChild
-        end
-    end
-
-    if !isnothing(node)
-        return node
-    end
-    return nothing
-end
-function find_data(tree::AVLTree{DimensionFreeData}, index::NTuple{N,Int}) where {N}
-    node = find_node(tree, index)
-    if isnothing(node)
-        return nothing
-    end
-    return node.data.data
-end
-function set_data!(
-    tree::AVLTree{DimensionFreeData}, value::T, index::NTuple{N,Int}
-) where {N,T}
-    node = find_node(tree, index)
-    if isnothing(node)
-        insert!(tree, DimensionFreeData{T,N}(value, index))
-    else
-        node.data.data = value
-    end
-end
-
-"""
     DynamicDimensionArray{T}
 A dimension free array in which overindexing is allowed. No out of bound error for this array.
 
@@ -69,7 +10,7 @@ The indexing of this array follows the rules below:
 while `arr[1,2,3]` doesn't exist but `arr[2,3]` exists, return `arr[2,3]`
 3. If non of the degenerated indices exists, return the default value.
 """
-mutable struct DynamicDimensionArray{T}
+mutable struct DynamicDimensionArray{T} <: AbstractDynamicDimensionArray{T}
     data::AVLTree{DimensionFreeData}
     default::T
 end
@@ -79,6 +20,7 @@ function Base.show(io::IO, arr::DynamicDimensionArray)
         """DynamicDimensionArray{$(typeof(arr.default))}: $(length(arr.data)) registered entries with default = $(arr.default).""",
     )
 end
+Base.length(arr::DynamicDimensionArray) = length(arr.data)
 
 """
     DynamicDimensionArray([default=0.0])
@@ -103,6 +45,68 @@ function DynamicDimensionArray{T}(
     return DynamicDimensionArray{T}(tree, default)
 end
 
+"""
+    find_node(tree, index)
+Return node on an `AVLTree` with given index, return `nothing` if such index is not found
+
+# Arguments
+- `tree::AVLTree{DimensionFreeData}`: AVL tree storing data by index
+- `index`: index of data to be retrieved
+"""
+function find_node(tree::AVLTree{DimensionFreeData}, index)
+    prev = nothing
+    node = tree.root
+    while !isnothing(node) && node.data.index != index
+        prev = node
+        if index < node.data.index
+            node = node.leftChild
+        else
+            node = node.rightChild
+        end
+    end
+
+    if !isnothing(node)
+        return node
+    end
+    return nothing
+end
+
+"""
+    find_data(tree, index)
+Return data value of a given index, return `nothing` if such index not found
+
+# Arguments
+- `tree::AVLTree{DimensionFreeData}`: AVL tree storing data by index
+- `index`: index of data to be retrieved
+"""
+function find_data(tree::AVLTree{DimensionFreeData}, index)
+    node = find_node(tree, index)
+    if isnothing(node)
+        return nothing
+    end
+    return node.data.data
+end
+
+# FIXME: unable to convert a concrete type to an non-concrete type
+"""
+    set_data!(tree, value, index)
+Set `value` binded with `index` into the tree. Overwrite value for already existing index,
+create a new node otherwise.
+
+# Arguments
+- `tree::AVLTree{DimensionFreeData}`: AVL tree storing data by index
+- `value::T`: value to insert into the tree
+- `index`: index of data to be retrieved
+"""
+function set_data!(tree::AVLTree{DimensionFreeData}, value, index)
+    node = find_node(tree, index)
+    if isnothing(node)
+        push!(tree, DimensionFreeData(value, index))
+    else
+        node.data.data = value
+    end
+end
+
 function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where {T}
     data = find_data(arr.data, index)
     if isnothing(data)
@@ -117,27 +121,32 @@ function Base.getindex(arr::DynamicDimensionArray{T}, index::Vararg{Int}) where 
     end
     return data
 end
-function Base.setindex!(
-    arr::DynamicDimensionArray{T}, value::T, index::Vararg{Int}
-) where {T}
+function Base.setindex!(arr::DynamicDimensionArray{T}, value, index...) where {T}
     set_data!(arr.data, value, index)
     return arr
 end
-Base.length(arr::DynamicDimensionArray) = length(arr.data)
 
-function Base.iterate(arr::DynamicDimensionArray, i=1)
+function Base.iterate(arr::DynamicDimensionArray, i::K=1) where {K<:Integer}
     if i > length(arr)
         return nothing
     end
     return Pair(arr.data[i].index, arr.data[i].data), i + 1
 end
 
+function empty(arr::DynamicDimensionArray{T}) where {T}
+    return DynamicDimensionArray(arr.default)
+end
+
+"""
+    delete!(arr, index)
+Delete the node with `index` in `arr`
+"""
 function delete!(arr::DynamicDimensionArray{T}, index::NTuple{N,Int}) where {T,N}
-    if length(index) == 4
+    if N == 4
         delete!(arr.d4, DimensionFreeData{T}(index))
-    elseif length(index) == 3
+    elseif N == 3
         delete!(arr.d3, DimensionFreeData{T}(index))
-    elseif length(index) == 2
+    elseif N == 2
         delete!(arr.d2, DimensionFreeData{T}(index))
     end
     return arr

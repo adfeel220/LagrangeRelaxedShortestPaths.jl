@@ -43,7 +43,7 @@ Run prioritized planning for all the agents
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `sources`: starting vertices of agents
 - `targets`: target vertices for the agents to go to
 - `departure_times::Vector{T}`: time when agents start traveling
@@ -59,7 +59,7 @@ i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, s
 """
 function prioritized_planning(
     network::AbstractGraph{V},
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::AbstractDynamicDimensionArray{C},
     sources,
     targets,
     departure_times::Vector{T}=zeros(Int, length(sources));

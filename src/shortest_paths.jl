@@ -31,7 +31,7 @@ Parent node of
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `agent`: agent index
 - `source::V`: starting vertex of agent
 where `V` is the type of vertex and `C` is the type of cost
@@ -42,7 +42,7 @@ by default `false`
 """
 function dijkstra(
     network::AbstractGraph{V},
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::AbstractDynamicDimensionArray{C},
     agent,
     source::V;
     backwards::Bool=false,
@@ -96,7 +96,7 @@ Returns the path as a vector of vertices, return nothing if fail to find a solut
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `agent`: agent index
 - `source::V`: starting vertex of agent
 - `target::V`: target vertex for the agent to go to
@@ -109,7 +109,7 @@ i.e. h(n) ≤ d(n) always true for all n. By default always returns 0
 """
 function astar(
     network::AbstractGraph{V},
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::AbstractDynamicDimensionArray{C},
     agent,
     source::V,
     target::V;
@@ -153,6 +153,48 @@ function astar(
 end
 
 """
+    resolve_heuristic(heuristic, network, agent, target, edge_costs)
+Resolve the heuristic so that the output is a function which maps a vertex `v` to a heuristic value.
+
+It takes several cases:
+- `Function`: Directly return the same function
+- `Symbol`: either `:dijkstra`, `:euclidean`, or `:lazy`
+"""
+function resolve_heuristic(
+    heuristic::Union{Symbol,Function},
+    network::AbstractGraph{V},
+    agent,
+    target::V,
+    edge_costs::AbstractDynamicDimensionArray{C},
+)::Function where {V,C}
+    # Direct return if heuristic is already a function
+    if isa(heuristic, Function)
+        return heuristic
+    end
+
+    # Symbol for special cases
+    # backward Dijkstra from the target point
+    if heuristic == :dijkstra
+        dijkstra_scores, _ = dijkstra(network, edge_costs, agent, target; backwards=true)
+        heuristic = (v -> dijkstra_scores[v])
+
+        # Euclidean distance between vertex to target
+    elseif heuristic == :euclidean
+        !isa(edge_costs, DynamicDimensionGridArray) &&
+            error("Euclidean heuristic only available when using grid edge cost")
+        heuristic = (v -> euclidean_distance(edge_costs, v, target))
+
+    elseif heuristic == :lazy
+        heuristic = (v -> zero(C))
+
+    else
+        @warn("Unrecognized heuristic symbol $heuristic, use lazy heuristic instead")
+    end
+
+    return heuristic
+end
+
+"""
     temporal_astar(
         network, edge_costs, agent, source, target, departure_time;
         heuristic, max_iter
@@ -162,7 +204,7 @@ Returns the path as a vector of time-expanded vertices, return nothing if fail t
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `agent`: agent index
 - `source::V`: starting vertex of agent
 - `target::V`: target vertex for the agent to go to
@@ -178,7 +220,7 @@ i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, s
 """
 function temporal_astar(
     network::AbstractGraph{V},
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::AbstractDynamicDimensionArray{C},
     agent,
     source::V,
     target::V,
@@ -188,24 +230,14 @@ function temporal_astar(
     heuristic::Union{Symbol,Function}=:dijkstra,
     max_iter::Int=typemax(Int),
 ) where {V,T<:Integer,C}
-    # Resolve heuristic
-    if isa(heuristic, Symbol)
-        if heuristic == :dijkstra
-            dijkstra_scores, _ = dijkstra(
-                network, edge_costs, agent, target; backwards=true
-            )
-            heuristic = (v -> dijkstra_scores[v])
-        elseif heuristic == :lazy
-            heuristic = (v -> zero(C))
-        else
-            error("Unrecognized heuristic symbol $heuristic")
-        end
-    end
+    # Resolve heuristic, after resolving heuristic can only be a function
+    heuristic = resolve_heuristic(heuristic, network, agent, target, edge_costs)
 
     # set of candidate nodes to be explored, use heap to retrieve minimum cost
     # node in constant time
-    open_set = BinaryHeap(
-        Base.By(last), [Pair((departure_time, source), heuristic(source))]
+    open_set = BinaryHeap{Pair{Tuple{T,V},C}}(
+        Base.Order.By{typeof(last),FasterForward}(last, FasterForward()),
+        [Pair((departure_time, source), heuristic(source))],
     )
 
     # parents store the traversing relationship between the time-expanded vertices
@@ -263,7 +295,7 @@ Apply A* for all the agents in parallel. Returns the paths and costs of individu
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::DynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
 - `sources::Vector{V}`: starting vertices of agents
 - `targets::Vector{V}`: target vertices for the agents to go to
 - `departure_times`: time when agents start traveling
@@ -278,11 +310,11 @@ i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, s
 """
 function shortest_paths(
     network::AbstractGraph{V},
-    edge_costs::DynamicDimensionArray{C},
+    edge_costs::AbstractDynamicDimensionArray{C},
     sources::Vector{V},
     targets::Vector{V},
     departure_times::Vector{T}=zeros(Int, length(sources));
-    heuristic::Union{Symbol,Function}=:dijkstra,
+    heuristics=[:dijkstra for _ in sources],
     max_iter::Int=typemax(Int),
     multi_threads::Bool=true,
 ) where {V,C,T<:Integer}
@@ -297,6 +329,7 @@ function shortest_paths(
             sv = sources[ag]
             tv = targets[ag]
             dep_time = departure_times[ag]
+            heuristic = heuristics[ag]
 
             paths[ag], costs[ag] = temporal_astar(
                 network, edge_costs, ag, sv, tv, dep_time; heuristic, max_iter
@@ -308,7 +341,8 @@ function shortest_paths(
     # Applying with generator instead of multi-threading
     results = [
         temporal_astar(network, edge_costs, ag, sv, tv, dep_time; heuristic, max_iter) for
-        (ag, (sv, tv, dep_time)) in enumerate(zip(sources, targets, departure_times))
+        (ag, (sv, tv, dep_time, heuristic)) in
+        enumerate(zip(sources, targets, departure_times, heuristics))
     ]
     # unzip results into two separated vectors for paths and costs
     return [first(res) for res in results], [last(res) for res in results]
