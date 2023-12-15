@@ -56,13 +56,9 @@ Update parameter in gradient ascend manner with Adam optimizer using a pre-compu
 - `param::A`: parameter to be updated
 - `adam::AdamOptimizer{T}`: adam optimizer
 - `grad::A`: gradient
-
-# Keyword arguments
-- `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
-- `rng`: random generator, by default `default_rng()`
 """
 function step!(
-    param::A, adam::AdamOptimizer{T}, grad::A; perturbation::T=1e-3, rng=default_rng()
+    param::A, adam::AdamOptimizer{T}, grad::A
 ) where {T,A<:AbstractDynamicDimensionArray{T}}
     adam.β1_t *= adam.β1
     adam.β2_t *= adam.β2
@@ -79,7 +75,7 @@ function step!(
         update_val = max(
             zero(T), param[idx...] + adam.α * corrected_m / (√corrected_v + adam.ϵ)
         )
-        param[idx...] = rand_perturbation(update_val, perturbation; rng)
+        param[idx...] = update_val
     end
 
     return param
@@ -102,21 +98,13 @@ Update parameter in gradient ascend manner with simple gradient optimizer using 
 - `param::A`: parameter to be updated
 - `opt::SimpleGradientOptimizer{T}`: simple gradient optimizer
 - `grad::A`: gradient
-
-# Keyword arguments
-- `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
-- `rng`: random generator, by default `default_rng()`
 """
 function step!(
-    param::A,
-    opt::SimpleGradientOptimizer{T},
-    grad::A;
-    perturbation::T=1e-3,
-    rng=default_rng(),
+    param::A, opt::SimpleGradientOptimizer{T}, grad::A
 ) where {T,A<:AbstractDynamicDimensionArray{T}}
     for (idx, grad_val) in grad
         update_val = max(zero(T), param[idx...] + opt.α * grad_val)
-        param[idx...] = rand_perturbation(update_val, perturbation; rng)
+        param[idx...] = update_val
     end
     return param
 end
@@ -143,21 +131,13 @@ using a pre-computed gradient
 - `param::A`: parameter to be updated
 - `opt::DecayGradientOptimizer{T}`: gradient optimizer with decaying step size
 - `grad::A`: gradient
-
-# Keyword arguments
-- `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
-- `rng`: random generator, by default `default_rng()`
 """
 function step!(
-    param::A,
-    opt::DecayGradientOptimizer{T},
-    grad::A;
-    perturbation::T=1e-3,
-    rng=default_rng(),
+    param::A, opt::DecayGradientOptimizer{T}, grad::A
 ) where {T,A<:AbstractDynamicDimensionArray{T}}
     for (idx, grad_val) in grad
         update_val = max(zero(T), param[idx...] + opt.α * grad_val)
-        param[idx...] = rand_perturbation(update_val, perturbation; rng)
+        param[idx...] = update_val
     end
     opt.α = max(opt.min_step_size, opt.α * opt.decay_rate)
     return param
@@ -179,15 +159,31 @@ function compute_gradient(
     multiplier::AbstractDynamicDimensionArray{C},
     vertex_conflicts::VertexConflicts{T,V,A},
     edge_conflicts::EdgeConflicts{T,V,A},
-    num_agents::Int,
+    num_agents::Int;
+    is_perturbed::Bool=true,
+    priority=Base.OneTo(num_agents),
+    perturbation=0.5,
+    rng=default_rng(),
 ) where {C,T,V,A}
     grad = empty(multiplier)
     # vertex conflicts
     for ((timestamp, vertex), agents) in vertex_conflicts
         # Multiple agents occupies, contains conflict
         violation = (length(agents) - one(C)) / (num_agents - one(C))
-        for (ag, from_v) in agents
-            grad[timestamp, ag, from_v, vertex] = violation
+
+        # Apply different level of penalty based on priority to avoid endless symmetric competition
+        if is_perturbed
+            shift = div(length(agents), 2) + one(C)  # shift amount w.r.t. ID
+            agent_priorities = [(priority[ag], ag, from_v) for (ag, from_v) in agents]
+            sort!(agent_priorities; by=first)
+            for (id, (_, ag, from_v)) in enumerate(agent_priorities)
+                grad[timestamp, ag, from_v, vertex] =
+                    violation * (one(C) + (id - shift) * perturbation / (shift - one(C)))
+            end
+        else
+            for (ag, from_v) in agents
+                grad[timestamp, ag, from_v, vertex] = rand_perturbation(violation)
+            end
         end
     end
 
@@ -195,9 +191,25 @@ function compute_gradient(
     for ((timestamp, from_v, to_v), agents) in edge_conflicts
         # Multiple agents occupies, contains conflict
         violation = (length(agents) - one(C)) / (num_agents - one(C))
-        for (ag, is_flip) in agents
-            v1, v2 = is_flip ? (to_v, from_v) : (from_v, to_v)
-            grad[timestamp, ag, v1, v2] += violation
+
+        if is_perturbed
+            # Apply different level of penalty based on priority to avoid endless symmetric competition
+            shift = div(length(agents), 2) + one(C)  # Roughly create a [-n/2:n/2] sequence
+            agent_priorities = [(priority[ag], ag, is_flip) for (ag, is_flip) in agents]
+            sort!(agent_priorities; by=first)
+            for (id, (_, ag, is_flip)) in enumerate(agent_priorities)
+                v1, v2 = is_flip ? (to_v, from_v) : (from_v, to_v)
+                grad[timestamp, ag, v1, v2] +=
+                    violation * (one(C) + (id - shift) * perturbation / (shift - one(C)))
+            end
+
+        else
+            for (ag, is_flip) in agents
+                v1, v2 = is_flip ? (to_v, from_v) : (from_v, to_v)
+                grad[timestamp, ag, v1, v2] += rand_perturbation(
+                    violation, perturbation; rng=rng
+                )
+            end
         end
     end
 
@@ -243,16 +255,27 @@ function update_multiplier!(
     vertex_conflicts::VertexConflicts{T,V,A},
     edge_conflicts::EdgeConflicts{T,V,A},
     num_agents::Int;
-    perturbation::C=1e-3,
+    random_perturbation::Bool=false,
+    priority=Base.OneTo(num_agents),
+    perturbation::C=0.1,
     rng=default_rng(),
     upper_bound::Vector{C}=Vector{C}(),
     current_val::Vector{C}=Vector{C}(),
 ) where {C,T,V,A}
-    grad = compute_gradient(multiplier, vertex_conflicts, edge_conflicts, num_agents)
+    grad = compute_gradient(
+        multiplier,
+        vertex_conflicts,
+        edge_conflicts,
+        num_agents;
+        priority,
+        perturbation,
+        is_perturbed=!random_perturbation,
+        rng,
+    )
     # if !isempty(upper_bound) && !isempty(current_val)
     #     polyak_step!(grad, upper_bound, current_val)
     # end
-    step!(multiplier, optimizer, grad; perturbation, rng)
+    step!(multiplier, optimizer, grad)
 
     return grad
 end

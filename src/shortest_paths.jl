@@ -314,7 +314,7 @@ function shortest_paths(
     sources::Vector{V},
     targets::Vector{V},
     departure_times::Vector{T}=zeros(Int, length(sources));
-    heuristic::Union{Symbol,Function}=:dijkstra,
+    heuristics=[:dijkstra for _ in sources],
     max_iter::Int=typemax(Int),
     multi_threads::Bool=true,
 ) where {V,C,T<:Integer}
@@ -329,6 +329,7 @@ function shortest_paths(
             sv = sources[ag]
             tv = targets[ag]
             dep_time = departure_times[ag]
+            heuristic = heuristics[ag]
 
             paths[ag], costs[ag] = temporal_astar(
                 network, edge_costs, ag, sv, tv, dep_time; heuristic, max_iter
@@ -340,7 +341,8 @@ function shortest_paths(
     # Applying with generator instead of multi-threading
     results = [
         temporal_astar(network, edge_costs, ag, sv, tv, dep_time; heuristic, max_iter) for
-        (ag, (sv, tv, dep_time)) in enumerate(zip(sources, targets, departure_times))
+        (ag, (sv, tv, dep_time, heuristic)) in
+        enumerate(zip(sources, targets, departure_times, heuristics))
     ]
     # unzip results into two separated vectors for paths and costs
     return [first(res) for res in results], [last(res) for res in results]

@@ -70,8 +70,10 @@ i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, s
 - `hard_timeout::Float64`: maximum physical time duration (in seconds) allowed for the program, by default `Inf`
 - `optimizer::Optimizer{C}`: optimizer for gradient ascend of Lagrange multiplier, by default is the
 `AdamOptimizer` with step size equals to 1% of minimum edge cost
-- `perturbation::T`: ratio of perturbation for lagrange multiplier update,
-by default `1e-3` (update value in ratio 1±0.001)
+- `random_perturbation::Bool`: whether use random perturbation on each step, use priority as perturbation if `false`,
+by default `false`
+- `perturbation::T`: ratio of perturbation for lagrange multiplier update, apply to both
+randomized and deterministic, by default `1e-3` (update value in ratio 1±0.001)
 - `rng_seed`: random seed for the program
 - `multi_threads::Bool`: whether to apply multi threading, by default `true`
 - `silent::Bool`: disable printing status on the console, by default `true`
@@ -91,17 +93,25 @@ function lagrange_relaxed_shortest_path(
     optimizer::AbstractOptimizer{C}=SimpleGradientOptimizer{C}(;
         α=1e-1 * minimum(x -> x.second, edge_costs; init=edge_costs.default)
     ),  # default step size as 1% of minimum cost
-    perturbation::C=1e-6,
+    random_perturbation::Bool=false,
+    perturbation::C=0.5,
     rng_seed=nothing,
     multi_threads::Bool=true,
     silent::Bool=true,
 ) where {C,A<:AbstractDynamicDimensionArray{C}}
     global_timer = time()
 
-    multiplier = empty(edge_costs)
-    cost = deepcopy(edge_costs)  # modified cost
+    # Initialize global data
+    multiplier::A = empty(edge_costs)
+    cost::A = deepcopy(edge_costs)  # modified cost
     reset!(optimizer)
     rng = isnothing(rng_seed) ? Xoshiro() : Xoshiro(rng_seed)
+
+    # Prepare heuristic for every agent
+    heuristics = [
+        resolve_heuristic(heuristic, network, ag, target_vertices[ag], edge_costs) for
+        ag in 1:length(source_vertices)
+    ]
 
     start_time = -1.0
     iter = zero(Int)
@@ -125,7 +135,7 @@ function lagrange_relaxed_shortest_path(
             source_vertices,
             target_vertices,
             departure_times;
-            heuristic,
+            heuristics=heuristics,
             max_iter=astar_max_iter,
             multi_threads,
         )
@@ -147,6 +157,8 @@ function lagrange_relaxed_shortest_path(
             vertex_conflicts,
             edge_conflicts,
             length(source_vertices);
+            random_perturbation,
+            priority,
             perturbation,
             rng,
         )
