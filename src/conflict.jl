@@ -98,7 +98,7 @@ Return edge occupancy table
 - `timed_paths::Vector{TimedPath{T,V}}`: Paths as sequence of time-expanded vertices for every agent
 
 # Keyword arguments
-- `swap::Bool`: whether to detect swapping confliccts, by default `false`
+- `swap::Bool`: whether to detect swapping conflicts, by default `false`
 - `return_first::Bool`: return only the first conflict if `true`, otherwise return all conflicts. By default `false`
 """
 function detect_edge_occupancy(
@@ -146,7 +146,7 @@ Detect edge conflicts given the timed paths of all agents
 - `capacity::Int`: capacity of edges, by default 1
 
 # Keyword arguments
-- `swap::Bool`: whether to detect swapping confliccts, by default `false`
+- `swap::Bool`: whether to detect swapping conflicts, by default `false`
 - `return_first::Bool`: return only the first conflict if `true`, otherwise return all conflicts. By default `false`
 """
 function detect_edge_conflict(
@@ -190,7 +190,7 @@ Return whether the multi-agent paths are feasible. Checks whether
 - `paths::Vector{TimedPath{T,V}}`: Paths as sequence of time-expanded vertices for every agent
 
 # Keyword arguments
-- `swap_conflict::Bool`: whether to detect swapping confliccts, by default `false`
+- `swap_conflict::Bool`: whether to detect swapping conflicts, by default `false`
 """
 function is_feasible(
     paths::Vector{TimedPath{T,V}}; swap_conflict::Bool=false

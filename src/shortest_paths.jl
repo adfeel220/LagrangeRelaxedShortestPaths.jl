@@ -208,6 +208,7 @@ where `V` is the type of vertex; `T` is the type of time; and `C` is the type of
 to target. This estimation has to always underestimate the cost to guarantee optimal result.
 i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports `:lazy` always return 0;
 `:dijkstra`: Dijkstra on the static graph from target vertex as estimation
+`:euclidean`: Euclidean distance between two vertices, only works with grid edge costs
 - `max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 """
 function temporal_astar(
