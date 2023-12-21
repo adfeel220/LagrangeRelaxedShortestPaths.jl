@@ -53,7 +53,7 @@ function detect_vertex_occupancy(
     # Register occupancy
     for (agent, itinerary) in enumerate(timed_paths)
         for (step_id, timed_step) in enumerate(itinerary)
-            prev_v = get(itinerary, step_id - 1, (0, zero(V)))[2]
+            prev_v = get(itinerary, step_id - 1, (agent, timed_step[2]))[2]
             # Record the vertex occupancy
             if haskey(vertex_occupancy, timed_step)
                 push!(vertex_occupancy[timed_step], (agent, prev_v))
@@ -72,7 +72,7 @@ function detect_vertex_occupancy(
 end
 
 """
-    detect_vertex_conflict(timed_paths[, capacity]; return_first)
+    detect_vertex_conflict(timed_paths, capacity; return_first)
 Detect vertex conflicts given the timed paths of all agents
 
 # Arguments
@@ -138,7 +138,7 @@ function detect_edge_occupancy(
 end
 
 """
-    detect_edge_conflict(timed_paths[, capacity]; swap, return_first)
+    detect_edge_conflict(timed_paths, capacity; swap, return_first)
 Detect edge conflicts given the timed paths of all agents
 
 # Arguments
@@ -163,9 +163,16 @@ end
 
 """
     n_conflicts(conflict)
-Return the number of conflicts given a conflict object
+Return the number of conflicts given a conflict object (either vertex or edge conflicts)
 """
-n_conflicts(conflict::Dict)::Int = length(conflict)
+function n_conflicts(
+    conflicts::Union{VertexConflicts{T,V,A},EdgeConflicts{T,V,A}}
+)::Int where {T,V,A}
+    if length(conflicts) == 0
+        return 0
+    end
+    return sum(length(agents) for agents in values(conflicts))
+end
 
 """
     is_conflict_free(conflict::Dict)
