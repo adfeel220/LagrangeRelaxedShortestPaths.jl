@@ -98,6 +98,8 @@ function Base.show(io::IO, arr::AbstractDynamicDimensionArray)
     )
 end
 
+Base.eltype(::AbstractDynamicDimensionArray{T}) where {T} = T
+
 """
     degenerate_tuple(t)
 Return a new tuple without the leftmost element of the original tuple in a type stable method

@@ -102,11 +102,24 @@ function Base.iterate(arr::DynamicDimensionArray2to4{T}, i::K=1) where {T,K<:Int
 end
 
 """
-    empty(arr::DynamicDimensionArray)
-Create an empty array with the same default value as the input array
+    empty(::DynamicDimensionArray2to4; default)
+Create an empty array with the same default value and element type as the input array
 """
-function empty(arr::DynamicDimensionArray2to4{T}) where {T}
-    return DynamicDimensionArray2to4(arr.default)
+function empty(
+    arr::DynamicDimensionArray2to4{T}; default::T=arr.default
+)::DynamicDimensionArray2to4{T} where {T}
+    return DynamicDimensionArray2to4(default)
+end
+
+function Base.haskey(arr::DynamicDimensionArray2to4{T}, key::NTuple{N,T}) where {N,T}
+    if N == 4
+        return !isnothing(find_node(arr.d4, key))
+    elseif N == 3
+        return !isnothing(find_node(arr.d3, key))
+    elseif N == 2
+        return !isnothing(find_node(arr.d2, key))
+    end
+    return false
 end
 
 """

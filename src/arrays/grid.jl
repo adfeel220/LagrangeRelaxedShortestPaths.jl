@@ -123,13 +123,24 @@ function Base.iterate(arr::DynamicDimensionGridArray{T}, i::K=1) where {T,K<:Int
 end
 
 """
-    empty(arr::DynamicDimensionArray)
+    empty(::DynamicDimensionGridArray; default, min_val)
 Create an empty array with the same default and minimum value as the input array
 """
-function empty(arr::DynamicDimensionGridArray)
-    return DynamicDimensionGridArray(
-        arr.grid_size; default=arr.default, min_val=arr.default
-    )
+function empty(
+    arr::DynamicDimensionGridArray{T}; default::T=arr.default, min_val::T=arr.min_val
+)::DynamicDimensionGridArray{T} where {T}
+    return DynamicDimensionGridArray(arr.grid_size; default=default, min_val=min_val)
+end
+
+function Base.haskey(arr::DynamicDimensionGridArray{T}, key::NTuple{N,T}) where {N,T}
+    if N == 4
+        return !isnothing(find_node(arr.d4, key))
+    elseif N == 3
+        return !isnothing(find_node(arr.d3, key))
+    elseif N == 2
+        return !isnothing(find_node(arr.d2, key))
+    end
+    return false
 end
 
 """
