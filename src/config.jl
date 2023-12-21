@@ -10,8 +10,11 @@ A structure to hold all necessary information for executing an MAPF solver
     target_vertices::Vector{V}
     edge_costs::A = DynamicDimensionArray2to4()
     departure_time::Vector{T} = zeros(Int, length(source_vertices))
+    priority::Vector{Int} = collect(Base.OneTo(length(source_vertices)))
 end
+
 nagents(config::MapfConfig) = length(config.source_vertices)
+
 function Base.show(io::IO, config::MapfConfig)
     return show(
         io,
@@ -20,7 +23,7 @@ function Base.show(io::IO, config::MapfConfig)
 end
 
 """
-    lagrange_relaxed_shortest_path(config)
+    lagrange_relaxed_shortest_path(config; kwargs...)
 Execute a Lagrange relaxed shortest paths with configuration file
 
 # Arguments
@@ -32,7 +35,8 @@ function lagrange_relaxed_shortest_path(config::MapfConfig; kwargs...)
         config.edge_costs,
         config.source_vertices,
         config.target_vertices,
-        config.departure_time;
+        config.departure_time,
+        config.priority;
         kwargs...,
     )
 end
