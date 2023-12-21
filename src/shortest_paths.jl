@@ -24,26 +24,23 @@ end
 
 """
     dijkstra(
-        network, edge_costs, agent, source, target; backwards
+        network, edge_costs, source; backwards
     )
 Run Dijkstra's algorithm and return the total costs and parents of the entire network.
-Parent node of 
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
-- `agent`: agent index
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (agent, time, from-v, to-v)
 - `source::V`: starting vertex of agent
 where `V` is the type of vertex and `C` is the type of cost
 
 # Keyword arguments
-- `backwards::Bool`: Whether to apply Dijkstra in a backward fashion (on reversed network),
+- `backwards::Bool`: Whether to apply Dijkstra in a backward fashion (edge direction reversed),
 by default `false`
 """
 function dijkstra(
     network::AbstractGraph{V},
     edge_costs::AbstractDynamicDimensionArray{C},
-    agent,
     source::V;
     backwards::Bool=false,
 ) where {V,C}
@@ -68,8 +65,7 @@ function dijkstra(
 
         # Explore the neighbors of current vertex
         for v in get_neighbors(network, vertex)
-            travel_cost =
-                backwards ? edge_costs[agent, v, vertex] : edge_costs[agent, vertex, v]
+            travel_cost = backwards ? edge_costs[v, vertex] : edge_costs[vertex, v]
             tentative_score = score + travel_cost
             neighbor_score = scores[v]
 
@@ -88,16 +84,14 @@ end
 
 """
     astar(
-        network, edge_costs, agent, source, target;
-        heuristic, max_iter
+        network, edge_costs, source, target; heuristic
     )
 Run A* algorithm on the network.
 Returns the path as a vector of vertices, return nothing if fail to find a solution
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
-- `agent`: agent index
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (agent, time, from-v, to-v)
 - `source::V`: starting vertex of agent
 - `target::V`: target vertex for the agent to go to
 where `V` is the type of vertex and `C` is the type of cost
@@ -110,7 +104,6 @@ i.e. h(n) ≤ d(n) always true for all n. By default always returns 0
 function astar(
     network::AbstractGraph{V},
     edge_costs::AbstractDynamicDimensionArray{C},
-    agent,
     source::V,
     target::V;
     heuristic::Function=n -> zero(C),
@@ -135,7 +128,7 @@ function astar(
 
         # Explore the neighbors of current vertex
         for v in outneighbors(network, vertex)
-            tentative_g_score = g_score[vertex] + edge_costs[agent, vertex, v]
+            tentative_g_score = g_score[vertex] + edge_costs[vertex, v]
             neighbor_g_score::C = get(g_score, v, typemax(C))
 
             # Record a neighbor as a good node to move forward if
@@ -153,7 +146,7 @@ function astar(
 end
 
 """
-    resolve_heuristic(heuristic, network, agent, target, edge_costs)
+    resolve_heuristic(heuristic, network, target, edge_costs)
 Resolve the heuristic so that the output is a function which maps a vertex `v` to a heuristic value.
 
 It takes several cases:
@@ -163,7 +156,6 @@ It takes several cases:
 function resolve_heuristic(
     heuristic::Union{Symbol,Function},
     network::AbstractGraph{V},
-    agent,
     target::V,
     edge_costs::AbstractDynamicDimensionArray{C},
 )::Function where {V,C}
@@ -175,7 +167,7 @@ function resolve_heuristic(
     # Symbol for special cases
     # backward Dijkstra from the target point
     if heuristic == :dijkstra
-        dijkstra_scores, _ = dijkstra(network, edge_costs, agent, target; backwards=true)
+        dijkstra_scores, _ = dijkstra(network, edge_costs, target; backwards=true)
         heuristic = (v -> dijkstra_scores[v])
 
         # Euclidean distance between vertex to target
@@ -204,7 +196,7 @@ Returns the path as a vector of time-expanded vertices, return nothing if fail t
 
 # Arguments
 - `network::AbstractGraph{V}`: network for the agent to travel on
-- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (time, agent, from-v, to-v)
+- `edge_costs::AbstractDynamicDimensionArray{C}`: cost indexed by (agent, time, from-v, to-v)
 - `agent`: agent index
 - `source::V`: starting vertex of agent
 - `target::V`: target vertex for the agent to go to
@@ -231,7 +223,7 @@ function temporal_astar(
     max_iter::Int=typemax(Int),
 ) where {V,T<:Integer,C}
     # Resolve heuristic, after resolving heuristic can only be a function
-    heuristic = resolve_heuristic(heuristic, network, agent, target, edge_costs)
+    heuristic = resolve_heuristic(heuristic, network, target, edge_costs)
 
     # set of candidate nodes to be explored, use heap to retrieve minimum cost
     # node in constant time
@@ -269,7 +261,7 @@ function temporal_astar(
             end
 
             # Compute tentative score for potential update
-            tentative_g_score = g_score[t, vertex] + edge_costs[next_time, agent, vertex, v]
+            tentative_g_score = g_score[t, vertex] + edge_costs[agent, next_time, vertex, v]
             neighbor_g_score::C = get(g_score, (next_time, v), typemax(C))
 
             # Record a neighbor as a good node to move forward if
@@ -301,12 +293,9 @@ Apply A* for all the agents in parallel. Returns the paths and costs of individu
 - `departure_times`: time when agents start traveling
 
 # Keyword arguments
-- `heuristic::Union{Symbol,Function}`: given a vertex as input, returns the estimated cost from this vertex
-to target. This estimation has to always underestimate the cost to guarantee optimal result.
-i.e. h(n) ≤ d(n) always true for all n. Can also be some predefined methods, supports `:lazy` always return 0;
-`:dijkstra`: Dijkstra on the static graph from target vertex as estimation
+- `heuristics`: list of heuristics for each agent
 - `max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
-- `multi_threads::Bool`: whether to apply multi threading, by default `true`
+- `multi_threads::Bool`: whether to apply multi threading for each agent's shortest path, by default `true`
 """
 function shortest_paths(
     network::AbstractGraph{V},
