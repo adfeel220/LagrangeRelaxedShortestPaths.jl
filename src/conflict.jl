@@ -53,7 +53,7 @@ function detect_vertex_occupancy(
     # Register occupancy
     for (agent, itinerary) in enumerate(timed_paths)
         for (step_id, timed_step) in enumerate(itinerary)
-            prev_v = get(itinerary, step_id - 1, (0, zero(V)))[2]
+            prev_v = get(itinerary, step_id - 1, (agent, timed_step[2]))[2]
             # Record the vertex occupancy
             if haskey(vertex_occupancy, timed_step)
                 push!(vertex_occupancy[timed_step], (agent, prev_v))
@@ -72,7 +72,7 @@ function detect_vertex_occupancy(
 end
 
 """
-    detect_vertex_conflict(timed_paths[, capacity]; return_first)
+    detect_vertex_conflict(timed_paths, capacity; return_first)
 Detect vertex conflicts given the timed paths of all agents
 
 # Arguments
@@ -98,7 +98,7 @@ Return edge occupancy table
 - `timed_paths::Vector{TimedPath{T,V}}`: Paths as sequence of time-expanded vertices for every agent
 
 # Keyword arguments
-- `swap::Bool`: whether to detect swapping confliccts, by default `false`
+- `swap::Bool`: whether to detect swapping conflicts, by default `false`
 - `return_first::Bool`: return only the first conflict if `true`, otherwise return all conflicts. By default `false`
 """
 function detect_edge_occupancy(
@@ -138,7 +138,7 @@ function detect_edge_occupancy(
 end
 
 """
-    detect_edge_conflict(timed_paths[, capacity]; swap, return_first)
+    detect_edge_conflict(timed_paths, capacity; swap, return_first)
 Detect edge conflicts given the timed paths of all agents
 
 # Arguments
@@ -146,7 +146,7 @@ Detect edge conflicts given the timed paths of all agents
 - `capacity::Int`: capacity of edges, by default 1
 
 # Keyword arguments
-- `swap::Bool`: whether to detect swapping confliccts, by default `false`
+- `swap::Bool`: whether to detect swapping conflicts, by default `false`
 - `return_first::Bool`: return only the first conflict if `true`, otherwise return all conflicts. By default `false`
 """
 function detect_edge_conflict(
@@ -163,9 +163,16 @@ end
 
 """
     n_conflicts(conflict)
-Return the number of conflicts given a conflict object
+Return the number of conflicts given a conflict object (either vertex or edge conflicts)
 """
-n_conflicts(conflict::Dict)::Int = length(conflict)
+function n_conflicts(
+    conflicts::Union{VertexConflicts{T,V,A},EdgeConflicts{T,V,A}}
+)::Int where {T,V,A}
+    if length(conflicts) == 0
+        return 0
+    end
+    return sum(length(agents) for agents in values(conflicts))
+end
 
 """
     is_conflict_free(conflict::Dict)
@@ -183,7 +190,7 @@ Return whether the multi-agent paths are feasible. Checks whether
 - `paths::Vector{TimedPath{T,V}}`: Paths as sequence of time-expanded vertices for every agent
 
 # Keyword arguments
-- `swap_conflict::Bool`: whether to detect swapping confliccts, by default `false`
+- `swap_conflict::Bool`: whether to detect swapping conflicts, by default `false`
 """
 function is_feasible(
     paths::Vector{TimedPath{T,V}}; swap_conflict::Bool=false

@@ -5,7 +5,7 @@ using DataStructures: push!, insert!
 using Graphs: AbstractGraph, DiGraph
 using Graphs: nv, ne, src, dst, vertices, edges, inneighbors, outneighbors
 using Graphs: wheel_digraph, add_edge!, rem_edge!, add_vertex!
-using Random: Xoshiro, default_rng, rand
+using Random: Xoshiro, default_rng, rand, shuffle
 
 import DataStructures: sorted_rank, delete!
 
@@ -33,7 +33,9 @@ include("arrays/grid.jl")
 
 include("shortest_paths.jl")
 include("conflict.jl")
+include("optimizers.jl")
 include("multiplier.jl")
+include("program_flow.jl")
 include("relaxed_shortest_path.jl")
 include("prioritized_planning.jl")
 include("config.jl")
