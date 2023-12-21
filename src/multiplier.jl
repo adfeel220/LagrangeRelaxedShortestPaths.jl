@@ -7,275 +7,133 @@ rand_perturbation(val::T, perturbation::T=1e-3; rng=default_rng()) where {T} =
     val * (one(T) + perturbation * 2.0 * (rand(rng) - 0.5))
 
 """
-    AbstractOptimizer{T}
-Abstract optimizer class, subtypes has to implement `step!(param, optimizer, gradient)`
-"""
-abstract type AbstractOptimizer{T} end
-reset!(optimizer::AbstractOptimizer{T}) where {T} = optimizer
-
-"""
-    AdamOptimizer{T} <: AbstractOptimizer{T}
-An Adam optimizer with default `α=0.001`, `β1=0.9`, `β2=0.999`, and `ϵ=1e-8`
-Supports initialization with `@kwdef`, by default utilizes `DynamicDimensionArray{T}`
-"""
-@kwdef mutable struct AdamOptimizer{T,A<:AbstractDynamicDimensionArray} <:
-                      AbstractOptimizer{T}
-    α::T = 0.001  # step size
-    β1::T = 0.9   # decay parameter [0, 1)
-    β2::T = 0.999 # decay parameter [0, 1)
-
-    β1_t::T = 1.0  # keep track of bias correcting term β1^t
-    β2_t::T = 1.0  # keep track of bias correcting term β2^t
-
-    m::A = DynamicDimensionArray2to4()   # 1st order momentum
-    v::A = DynamicDimensionArray2to4()   # 2nd order momentum
-    ϵ::T = 1e-8  # smooth factor
-end
-function AdamOptimizer(step_size::T) where {T}
-    return AdamOptimizer{T,DynamicDimensionArray2to4{T}}(; α=step_size)
-end
-
-"""
-    reset(optimizer)
-Reset the Adam optimzier to `t=0` and clear all 1st and 2nd momentum
-"""
-function reset!(optimizer::AdamOptimizer{T}) where {T}
-    optimizer.β1_t = one(T)
-    optimizer.β2_t = one(T)
-    optimizer.m = empty(optimizer.m)
-    optimizer.v = empty(optimizer.v)
-
-    return optimizer
-end
-
-"""
-    step!(param, adam, grad; perturbation, rng)
-Update parameter in gradient ascend manner with Adam optimizer using a pre-computed gradient
+    compute_gradient(
+        vertex_multiplier, edge_multiplier, vertex_occupancy, edge_occupancy, num_agents;
+        perturbation, rng
+    )
+Compute gradient given the current occupancy table of agents on the network.
+Return gradients with respect to vertex and edge conflicts.
 
 # Arguments
-- `param::A`: parameter to be updated
-- `adam::AdamOptimizer{T}`: adam optimizer
-- `grad::A`: gradient
-"""
-function step!(
-    param::A, adam::AdamOptimizer{T}, grad::A
-) where {T,A<:AbstractDynamicDimensionArray{T}}
-    adam.β1_t *= adam.β1
-    adam.β2_t *= adam.β2
-
-    # Iterate a DynamicDimensionArray only returns non-default values
-    for (idx, grad_val) in grad
-        adam.m[idx...] = adam.β1 * adam.m[idx...] + (1 - adam.β1) * grad_val
-        adam.v[idx...] = adam.β2 * adam.v[idx...] + (1 - adam.β2) * grad_val^2
-
-        corrected_m = adam.m[idx...] / (1 - adam.β1_t)
-        corrected_v = adam.v[idx...] / (1 - adam.β2_t)
-
-        # plus sign because of gradient ascend
-        update_val = max(
-            zero(T), param[idx...] + adam.α * corrected_m / (√corrected_v + adam.ϵ)
-        )
-        param[idx...] = update_val
-    end
-
-    return param
-end
-
-"""
-    SimpleGradientOptimizer{T} <: AbstractOptimizer{T}
-An basic gradient optimizer with default step size `α=0.001`.
-Supports initialization with `@kwdef`
-"""
-@kwdef mutable struct SimpleGradientOptimizer{T} <: AbstractOptimizer{T}
-    α::T = 0.001  # step size
-end
-
-"""
-    step!(param, opt, grad; perturbation, rng)
-Update parameter in gradient ascend manner with simple gradient optimizer using a pre-computed gradient
-
-# Arguments
-- `param::A`: parameter to be updated
-- `opt::SimpleGradientOptimizer{T}`: simple gradient optimizer
-- `grad::A`: gradient
-"""
-function step!(
-    param::A, opt::SimpleGradientOptimizer{T}, grad::A
-) where {T,A<:AbstractDynamicDimensionArray{T}}
-    for (idx, grad_val) in grad
-        update_val = max(zero(T), param[idx...] + opt.α * grad_val)
-        param[idx...] = update_val
-    end
-    return param
-end
-
-"""
-    DecayGradientOptimizer{T} <: AbstractOptimizer{T}
-An basic gradient optimizer with default starting step size `α=1.0`
-Supports initialization with `@kwdef`
-"""
-@kwdef mutable struct DecayGradientOptimizer{T} <: AbstractOptimizer{T}
-    α::T = 1.0  # step size
-    decay_rate::T = 0.999  # decay rate
-    min_step_size::T = 1e-4  # minimum step size
-end
-function DecayGradientOptimizer(step_size::T) where {T}
-    return DecayGradientOptimizer{T}(; α=step_size)
-end
-"""
-    step!(param, opt, grad; perturbation, rng)
-Update parameter in gradient ascend manner with step size decaying gradient optimizer
-using a pre-computed gradient
-
-# Arguments
-- `param::A`: parameter to be updated
-- `opt::DecayGradientOptimizer{T}`: gradient optimizer with decaying step size
-- `grad::A`: gradient
-"""
-function step!(
-    param::A, opt::DecayGradientOptimizer{T}, grad::A
-) where {T,A<:AbstractDynamicDimensionArray{T}}
-    for (idx, grad_val) in grad
-        update_val = max(zero(T), param[idx...] + opt.α * grad_val)
-        param[idx...] = update_val
-    end
-    opt.α = max(opt.min_step_size, opt.α * opt.decay_rate)
-    return param
-end
-
-"""
-    compute_gradient(multiplier, vertex_conflict, edge_conflict)
-Compute gradient given the current conflict table of agents on the network.
-Only vertex and edge conflicts (potential swapping conflicts) are considered.
-
-# Arguments
-- `multiplier::AbstractDynamicDimensionArray{C}`: Lagrange multiplier with type of cost `C`
-- `vertex_conflict::VertexConflicts{T,V,A}`: conflict table of vertices with type of time `T`,
+- `vertex_multiplier::AbstractDynamicDimensionArray{C}`: Lagrange multiplier for vertex conflicts
+with type of cost `C`, indexed by (time, vertex)
+- `edge_multiplier::AbstractDynamicDimensionArray{C}`: Lagrange multiplier for edge conflicts
+with type of cost `C`, indexed by (time, vertex)
+- `vertex_occupancy::VertexConflicts{T,V,A}`: occupancy table of vertices with type of time `T`,
 vertex `V`, agent `A`
-- `edge_conflict::EdgeConflicts{T,V,A}`: conflict table of edges with type of time `T`,
+- `edge_occupancy::EdgeConflicts{T,V,A}`: occupancy table of edges with type of time `T`,
 vertex `V`, agent `A`
+- `num_agents::Int`: Number of agents in the network, for normalizing gradient size
+
+# Keyword arguments
+- `perturbation`: ratio of perturbation (± percentage), by default `0.0`
+- `rng`: random generator, by default `default_rng()`
 """
 function compute_gradient(
-    multiplier::AbstractDynamicDimensionArray{C},
-    vertex_conflicts::VertexConflicts{T,V,A},
-    edge_conflicts::EdgeConflicts{T,V,A},
+    vertex_multiplier::AbstractDynamicDimensionArray{C},
+    edge_multiplier::AbstractDynamicDimensionArray{C},
+    vertex_occupancy::VertexConflicts{T,V,A},
+    edge_occupancy::EdgeConflicts{T,V,A},
     num_agents::Int;
-    is_perturbed::Bool=true,
-    priority=Base.OneTo(num_agents),
-    perturbation=0.5,
+    perturbation=0.0,
     rng=default_rng(),
 ) where {C,T,V,A}
-    grad = empty(multiplier)
-    # vertex conflicts
-    for ((timestamp, vertex), agents) in vertex_conflicts
-        # Multiple agents occupies, contains conflict
-        violation = (length(agents) - one(C)) / (num_agents - one(C))
+    vertex_grad = empty(vertex_multiplier; default=zero(C))
+    edge_grad = empty(edge_multiplier; default=zero(C))
 
-        # Apply different level of penalty based on priority to avoid endless symmetric competition
-        if is_perturbed
-            shift = div(length(agents), 2) + one(C)  # shift amount w.r.t. ID
-            agent_priorities = [(priority[ag], ag, from_v) for (ag, from_v) in agents]
-            sort!(agent_priorities; by=first)
-            for (id, (_, ag, from_v)) in enumerate(agent_priorities)
-                grad[timestamp, ag, from_v, vertex] =
-                    violation * (one(C) + (id - shift) * perturbation / (shift - one(C)))
-            end
-        else
-            for (ag, from_v) in agents
-                grad[timestamp, ag, from_v, vertex] = rand_perturbation(violation)
-            end
+    vertex_visited_instances = Set{Tuple{T,V}}()
+    edge_visited_instances = Set{Tuple{T,V,V}}()
+
+    # vertex conflicts
+    for ((timestamp, vertex), agents) in vertex_occupancy
+
+        # Only one agent occupies, maintain multiplier value
+        if length(agents) == 1
+            push!(vertex_visited_instances, (timestamp, vertex))
+            continue
         end
+
+        # Multiple agents occupies this vertex, update 
+        violation = (length(agents) - one(C)) / (num_agents - one(C))
+        vertex_grad[timestamp, vertex] = rand_perturbation(violation, perturbation; rng)
+        push!(vertex_visited_instances, (timestamp, vertex))
+    end
+
+    # Decrease the multipliers that no agent touches
+    for (idx, val) in vertex_multiplier
+        (idx in vertex_visited_instances) && continue
+        vertex_grad[idx...] = -one(C) / (num_agents - one(C))
     end
 
     # edge conflicts
-    for ((timestamp, from_v, to_v), agents) in edge_conflicts
-        # Multiple agents occupies, contains conflict
-        violation = (length(agents) - one(C)) / (num_agents - one(C))
+    for ((timestamp, from_v, to_v), agents) in edge_occupancy
 
-        if is_perturbed
-            # Apply different level of penalty based on priority to avoid endless symmetric competition
-            shift = div(length(agents), 2) + one(C)  # Roughly create a [-n/2:n/2] sequence
-            agent_priorities = [(priority[ag], ag, is_flip) for (ag, is_flip) in agents]
-            sort!(agent_priorities; by=first)
-            for (id, (_, ag, is_flip)) in enumerate(agent_priorities)
-                v1, v2 = is_flip ? (to_v, from_v) : (from_v, to_v)
-                grad[timestamp, ag, v1, v2] +=
-                    violation * (one(C) + (id - shift) * perturbation / (shift - one(C)))
-            end
-
-        else
-            for (ag, is_flip) in agents
-                v1, v2 = is_flip ? (to_v, from_v) : (from_v, to_v)
-                grad[timestamp, ag, v1, v2] += rand_perturbation(
-                    violation, perturbation; rng=rng
-                )
-            end
-        end
-    end
-
-    return grad
-end
-
-"""
-"""
-function polyak_step!(
-    grad::AbstractDynamicDimensionArray{C}, upper_bound::Vector{C}, current_val::Vector{C}
-) where {C}
-    for (index, grad_val) in grad
-        ag = index[2]
-        if upper_bound[ag] < current_val[ag]
+        # Only one agent occupies, maintain multiplier value
+        if length(agents) == 1
+            push!(edge_visited_instances, (timestamp, from_v, to_v))
             continue
         end
-        grad[index...] *= (upper_bound[ag] - current_val[ag])
+
+        violation = (length(agents) - one(C)) / (num_agents - one(C))
+        edge_grad[timestamp, from_v, to_v] = rand_perturbation(violation, perturbation; rng)
+        push!(edge_visited_instances, (timestamp, from_v, to_v))
     end
-    return grad
+
+    # Decrease the multipliers that no agent touches
+    for (idx, val) in edge_multiplier
+        (idx in edge_visited_instances) && continue
+        edge_grad[idx...] = -one(C) / (num_agents - one(C))
+    end
+
+    return vertex_grad, edge_grad
 end
 
 """
     update_multiplier!(
-        multiplier, optimizer, vertex_conflicts, edge_conflicts; perturbation, rng
+        vertex_multiplier, edge_multiplier, vertex_optimizer, edge_optimizer,
+        vertex_occupancy, edge_occupancy; perturbation, rng
     )
 Update the Lagrange multipleir based on the current conflicts table
 
 # Arguments
-- `multiplier::DynamicDimensionArray{C}`: Lagrange multiplier with type of cost `C`
-- `optimizer::Optimizer{C}`: optimizer for gradient ascend on the Lagrange multiplier
-- `vertex_conflicts::VertexConflicts{T,V,A}`: conflicts table of vertices with type of time `T`,
+- `vertex_multiplier::AbstractDynamicDimensionArray{C}`: Lagrange multiplier for vertex conflicts
+with type of cost `C`, indexed by (time, vertex)
+- `edge_multiplier::AbstractDynamicDimensionArray{C}`: Lagrange multiplier for edge conflicts
+with type of cost `C`, indexed by (time, vertex)
+- `vertex_optimizer::Optimizer{C}`: optimizer for gradient ascend on the vertex multiplier
+- `edge_optimizer::Optimizer{C}`: optimizer for gradient ascend on the edge multiplier
+- `vertex_occupancy::VertexConflicts{T,V,A}`: occupancy table of vertices with type of time `T`,
 vertex `V`, agent `A`
-- `edge_conflicts::EdgeConflicts{T,V,A}`: conflicts table of edges with type of time `T`,
+- `edge_occupancy::EdgeConflicts{T,V,A}`: occupancy table of edges with type of time `T`,
 vertex `V`, agent `A`
+- `num_agents::Int`: Number of agents in the network, for normalizing gradient size
 
 # Keyword arguments
-- `perturbation::T`: ratio of perturbation, by default `1e-3`, (update value in ratio 1±0.001)
+- `perturbation`: ratio of perturbation (± percentage), by default `0.0`
 - `rng`: random generator, by default `default_rng()`
 """
 function update_multiplier!(
-    multiplier::AbstractDynamicDimensionArray{C},
-    optimizer::AbstractOptimizer{C},
-    vertex_conflicts::VertexConflicts{T,V,A},
-    edge_conflicts::EdgeConflicts{T,V,A},
+    vertex_multiplier::AbstractDynamicDimensionArray{C},
+    edge_multiplier::AbstractDynamicDimensionArray{C},
+    vertex_optimizer::AbstractOptimizer{C},
+    edge_optimizer::AbstractOptimizer{C},
+    vertex_occupancy::VertexConflicts{T,V,A},
+    edge_occupancy::EdgeConflicts{T,V,A},
     num_agents::Int;
-    random_perturbation::Bool=false,
-    priority=Base.OneTo(num_agents),
-    perturbation::C=0.1,
+    perturbation=0.0,
     rng=default_rng(),
-    upper_bound::Vector{C}=Vector{C}(),
-    current_val::Vector{C}=Vector{C}(),
 ) where {C,T,V,A}
-    grad = compute_gradient(
-        multiplier,
-        vertex_conflicts,
-        edge_conflicts,
+    vertex_grad, edge_grad = compute_gradient(
+        vertex_multiplier,
+        edge_multiplier,
+        vertex_occupancy,
+        edge_occupancy,
         num_agents;
-        priority,
         perturbation,
-        is_perturbed=!random_perturbation,
         rng,
     )
-    # if !isempty(upper_bound) && !isempty(current_val)
-    #     polyak_step!(grad, upper_bound, current_val)
-    # end
-    step!(multiplier, optimizer, grad)
+    step!(vertex_multiplier, vertex_optimizer, vertex_grad)
+    step!(edge_multiplier, edge_optimizer, edge_grad)
 
-    return grad
+    return vertex_grad, edge_grad
 end
