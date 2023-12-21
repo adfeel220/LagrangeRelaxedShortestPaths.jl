@@ -102,9 +102,13 @@ function prioritized_planning(
         if is_planning_failed(paths[ag])
             continue
         end
-        push!(reserved_vertices, paths[ag]...)
+        for v in paths[ag]
+            push!(reserved_vertices, v)
+        end
         edge_reserve = vertex_path_to_edge_reservation(paths[ag]; swap=swap_conflict)
-        push!(reserved_edges, edge_reserve...)
+        for e in edge_reserve
+            push!(reserved_edges, e)
+        end
     end
 
     return paths, costs
