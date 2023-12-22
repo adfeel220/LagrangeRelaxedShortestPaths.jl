@@ -268,6 +268,29 @@ function lagrange_relaxed_shortest_path(
         target_v in target_vertices
     ]
 
+    # Simple lower bound as parallel shortest path with the original cost
+    paths, scores = shortest_paths(
+        network,
+        edge_costs,
+        source_vertices,
+        target_vertices,
+        departure_times;
+        heuristics=heuristics,
+        max_iter=astar_max_iter,
+        multi_threads,
+    )
+
+    # Early termination if precomputation is already the best
+    if is_conflict_free(detect_vertex_conflict(paths)) &&
+        is_conflict_free(detect_edge_conflict(paths; swap=swap_conflict))
+        if !silent
+            println("")
+            @info "Optimal solution found without any conflict, " *
+                "return total score of $(sum(scores)) with parallel A*"
+        end
+        return paths, scores
+    end
+
     # Simple upper bound as plain prioritized planning score
     best_pp_path, best_pp_scores = prioritized_planning(
         network,
@@ -280,17 +303,7 @@ function lagrange_relaxed_shortest_path(
         heuristic,
         max_iter=astar_max_iter,
     )
-    # Simple lower bound as parallel shortest path with the original cost
-    paths, scores = shortest_paths(
-        network,
-        edge_costs,
-        source_vertices,
-        target_vertices,
-        departure_times;
-        heuristics=heuristics,
-        max_iter=astar_max_iter,
-        multi_threads,
-    )
+
     lower_bound = sum(scores)
     upper_bound = sum(best_pp_scores)
     relaxed_score = lower_bound
@@ -352,7 +365,7 @@ function lagrange_relaxed_shortest_path(
             end
 
             # Parallel A* to obtain the current Lagrange relaxation result
-            paths, _ = shortest_paths(
+            paths, scores = shortest_paths(
                 network,
                 cost,
                 source_vertices,
