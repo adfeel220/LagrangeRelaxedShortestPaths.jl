@@ -100,3 +100,42 @@ function ready_to_terminate(
 
     return false
 end
+
+"""
+    time_with_unit(time_s; digits)
+Return a `String` with human friendly readable format with input time in the unit of seconds.
+If a number is larger than 1.0, returns `day-hour-minute-second` format;
+If a number is smaller than 1.0, returns `ms`, `μs`, `ns`, etc.
+"""
+function time_with_unit(time_s::AbstractFloat; digits=3)::String
+    if time_s >= 1.0
+        units = ["d" => 86400.0, "h" => 3600.0, "m" => 60.0]
+
+        unallocated_time = time_s
+        time_with_unit = ""
+        for (u, mul) in units
+            if unallocated_time >= mul
+                high_unit_number = round(Int, div(unallocated_time, mul))
+                unallocated_time %= mul
+                time_with_unit *= "$high_unit_number$u"
+            end
+        end
+
+        time_with_unit *= "$(round(unallocated_time; digits=digits))s"
+
+        return time_with_unit
+
+    else
+        units = [
+            "m" => 1e-3, "μ" => 1e-6, "n" => 1e-9, "p" => 1e-12, "f" => 1e-15, "a" => 1e-18
+        ]
+
+        for (u, mul) in units
+            if time_s >= mul
+                return "$(round(time_s / mul; digits=digits))$(u)s"
+            end
+        end
+
+        return "$(round(time_s * 1e18; digits=digits))as"
+    end
+end

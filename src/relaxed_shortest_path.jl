@@ -65,7 +65,7 @@ function update_cost!(
         if val ≈ 0.0
             delete!(cost, idx)
         else
-            cost[idx...] = origin_cost[idx...] + val
+            cost[idx] = origin_cost[idx] + val
         end
     end
 
@@ -323,7 +323,7 @@ function lagrange_relaxed_shortest_path(
                 is_time_for_next_event(refresh_rate, iter, last_status_printed_time)
                 print("\r" * " "^previous_printing_length)
                 print_info =
-                    "\rIter = $iter ($(round(time() - global_timer; digits=2)) s): " *
+                    "\rIter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
                     "≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
                     "in $(round(lower_bound; digits=5))($relaxed_score) - $(round(upper_bound; digits=3)) " *
                     "with $num_conflicts conflicts"
@@ -424,10 +424,11 @@ function lagrange_relaxed_shortest_path(
                 if num_conflicts > 0 || upper_bound < a_star_total_score
                     if !silent
                         println(
-                            "\rIter = $iter: ≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
+                            "\rIter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
+                            "≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
                             "in $(round(lower_bound; digits=3)) - $(round(upper_bound; digits=3))",
                         )
-                        @info "At total score of $(upper_bound) using prioritized planning"
+                        @info "Return with total score of $(upper_bound) using prioritized planning"
                     end
                     return best_pp_path, best_pp_scores
 
@@ -436,10 +437,11 @@ function lagrange_relaxed_shortest_path(
                     suboptimality = max(a_star_total_score - lower_bound) / lower_bound
                     if !silent
                         println(
-                            "\rIter = $iter: ≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
+                            "\rIter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
+                            "≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
                             "in $(round(lower_bound; digits=3)) - $(round(upper_bound; digits=3))",
                         )
-                        @info "At total score of $(sum(a_star_total_score)) using relaxed A*"
+                        @info "Return with total score of $(sum(a_star_total_score)) using relaxed A*"
                     end
                     return paths, astar_scores
                 end
@@ -469,7 +471,8 @@ function lagrange_relaxed_shortest_path(
     # Meaningful solution hasn't been reach during the main loop, return the best known result at the moment
     if !silent
         println("")
-        @info "Timeout after $iter iterations with ≤$(round(suboptimality*1e2; digits=3))% suboptimal solution, " *
+        @info "Timeout after $iter iterations ($(time_with_unit(time() - global_timer; digits=2))) " *
+            "with ≤$(round(suboptimality*1e2; digits=3))% suboptimal solution, " *
             "return result from prioritized planning with score $(sum(best_pp_scores))"
     end
     return best_pp_path, best_pp_scores
