@@ -42,28 +42,37 @@ function DynamicDimensionArray2to4(default::T=zero(Float64)) where {T<:Number}
     return DynamicDimensionArray2to4{T}(t2, t3, t4, default)
 end
 
-function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int,4}) where {T}
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::NTuple{4,Int}) where {T}
     data = find_data(arr.d4, index)
     if !isnothing(data)
         return data
     end
-    return arr[degenerate_tuple(index)...]
+    return arr[degenerate_tuple(index)]
+end
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int,4}) where {T}
+    return Base.getindex(arr, index)
 end
 
-function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int,3}) where {T}
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::NTuple{3,Int}) where {T}
     data = find_data(arr.d3, index)
     if !isnothing(data)
         return data
     end
-    return arr[degenerate_tuple(index)...]
+    return arr[degenerate_tuple(index)]
+end
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int,3}) where {T}
+    return Base.getindex(arr, index)
 end
 
-function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int,2}) where {T}
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::NTuple{2,Int}) where {T}
     data = find_data(arr.d2, index)
     if !isnothing(data)
         return data
     end
     return arr.default
+end
+function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::Vararg{Int,2}) where {T}
+    return Base.getindex(arr, index)
 end
 
 function Base.getindex(arr::DynamicDimensionArray2to4{T}, index...) where {T}
@@ -71,7 +80,7 @@ function Base.getindex(arr::DynamicDimensionArray2to4{T}, index...) where {T}
 end
 
 function Base.setindex!(
-    arr::DynamicDimensionArray2to4{T}, value::T, index::Vararg{Int,N}
+    arr::DynamicDimensionArray2to4{T}, value::T, index::NTuple{N,Int}
 ) where {T,N}
     if N == 4
         set_data!(arr.d4, value, index)
@@ -81,6 +90,11 @@ function Base.setindex!(
         set_data!(arr.d2, value, index)
     end
     return arr
+end
+function Base.setindex!(
+    arr::DynamicDimensionArray2to4{T}, value::T, index::Vararg{Int,N}
+) where {T,N}
+    return Base.setindex!(arr, value, index)
 end
 
 function Base.iterate(arr::DynamicDimensionArray2to4{T}, i::K=1) where {T,K<:Integer}
