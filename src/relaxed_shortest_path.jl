@@ -359,11 +359,12 @@ function lagrange_relaxed_shortest_path(
                 optimality_threshold,
                 max_exploration_time,
                 silent,
-            )        
+            )
 
             if is_terminate
-                a_star_total_score = sum(compute_scores(paths, edge_costs))
-        
+                astar_scores = compute_scores(paths, edge_costs)
+                a_star_total_score = sum(astar_scores)
+
                 # Return result from prioritized planning if
                 # 1. parallel A* does not have a feasible solution yet
                 # 2. parallel A* has a feasible solution but worst than PP
@@ -377,7 +378,7 @@ function lagrange_relaxed_shortest_path(
                         @info "Return with total score of $(upper_bound) using prioritized planning"
                     end
                     return best_pp_path, best_pp_scores
-        
+
                     # Return parallel A* solution
                 else
                     suboptimality = max(a_star_total_score - lower_bound) / lower_bound
@@ -391,7 +392,7 @@ function lagrange_relaxed_shortest_path(
                     end
                     return paths, astar_scores
                 end
-            end        
+            end
 
             # Update multipliers to compute modified costs
             update_multiplier!(
