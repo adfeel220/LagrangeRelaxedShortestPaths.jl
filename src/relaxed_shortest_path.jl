@@ -322,6 +322,7 @@ function lagrange_relaxed_shortest_path(
     suboptimality = (upper_bound - lower_bound) / lower_bound
 
     !silent && @info "Obtain initial upper bound = $upper_bound"
+    !silent && @info "Start searching with $num_conflicts conflicts"
 
     #############
     # Main Loop #
