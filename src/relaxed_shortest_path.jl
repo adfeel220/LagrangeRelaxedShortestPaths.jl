@@ -262,18 +262,15 @@ function lagrange_relaxed_shortest_path(
         length(edge_costs) > 0 ? minimum(x -> x.second, edge_costs) : edge_costs.default
 
     # Prepare heuristic for every agent
-    if !silent
-        @info "Resolving A* heuristics"
-    end
+    !silent && @info "Resolving A* heuristics"
+
     heuristics = [
         resolve_heuristic(heuristic, network, target_v, edge_costs) for
         target_v in target_vertices
     ]
 
     # Simple lower bound as parallel shortest path with the original cost
-    if !silent
-        @info "Precompute parallel A* for lower bound estimation"
-    end
+    !silent && @info "Precompute parallel A* for lower bound estimation"
 
     paths, scores = shortest_paths(
         network,
@@ -285,6 +282,8 @@ function lagrange_relaxed_shortest_path(
         max_iter=astar_max_iter,
         multi_threads,
     )
+
+    !silent && @info "Obtain initial lower bound = $(sum(scores))"
 
     vertex_occupancy = detect_vertex_occupancy(paths)
     edge_occupancy = detect_edge_occupancy(paths; swap=swap_conflict)
@@ -302,9 +301,7 @@ function lagrange_relaxed_shortest_path(
     end
 
     # Simple upper bound as plain prioritized planning score
-    if !silent
-        @info "Precompute prioritized planning for upper bound estimation"
-    end
+    !silent && @info "Precompute prioritized planning for upper bound estimation"
 
     best_pp_path, best_pp_scores = prioritized_planning(
         network,
@@ -323,6 +320,8 @@ function lagrange_relaxed_shortest_path(
     relaxed_score = lower_bound
     num_conflicts = n_conflicts(vertex_conflicts) + n_conflicts(edge_conflicts)
     suboptimality = (upper_bound - lower_bound) / lower_bound
+
+    !silent && @info "Obtain initial upper bound = $upper_bound"
 
     #############
     # Main Loop #
