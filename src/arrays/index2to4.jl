@@ -42,6 +42,11 @@ function DynamicDimensionArray2to4(default::T=zero(Float64)) where {T<:Number}
     return DynamicDimensionArray2to4{T}(t2, t3, t4, default)
 end
 
+"""
+    getindex(DynamicDimensionArray2to4, index...)
+Efficient implementation of dynamic indexing by explicitly giving the size of index
+utilizing multiple dispatching
+"""
 function Base.getindex(arr::DynamicDimensionArray2to4{T}, index::NTuple{4,Int}) where {T}
     data = find_data(arr.d4, index)
     if !isnothing(data)
@@ -97,6 +102,10 @@ function Base.setindex!(
     return Base.setindex!(arr, value, index)
 end
 
+"""
+    iterate(::DynamicDimensionGridArray)
+Traverse the underlying data storage trees
+"""
 function Base.iterate(arr::DynamicDimensionArray2to4{T}, i::K=1) where {T,K<:Integer}
     if i > length(arr)
         return nothing
@@ -125,6 +134,10 @@ function empty(
     return DynamicDimensionArray2to4(default)
 end
 
+"""
+    haskey(arr::DynamicDimensionGridArray, key::NTuple)
+Check if a key (index) is registered in the array
+"""
 function Base.haskey(arr::DynamicDimensionArray2to4{T}, key::NTuple{N,T}) where {N,T}
     if N == 4
         return !isnothing(find_node(arr.d4, key))
