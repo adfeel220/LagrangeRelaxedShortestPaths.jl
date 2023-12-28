@@ -50,17 +50,16 @@ end
 Test termination criteria and return `true` and message if one of the condition is met.
 """
 function ready_to_terminate(
-    vertex_conflicts::VertexConflicts{T,V,A},
-    edge_conflicts::EdgeConflicts{T,V,A},
+    num_conflicts::Int,
     upper_bound::C,
     lower_bound::C,
     absolute_optimality_threshold::C,
     exploration_status::S;
     relative_optimality_threshold::C=0.0,
     max_exploration_time::S,
-) where {T,V,A,C,S<:Union{Integer,AbstractFloat}}
+) where {C,S<:Union{Integer,AbstractFloat}}
     # Criteria 1: conflict free
-    if is_conflict_free(vertex_conflicts) && is_conflict_free(edge_conflicts)
+    if num_conflicts <= 0
         return true, "Terminate upon finding a conflict free solution"
     end
 

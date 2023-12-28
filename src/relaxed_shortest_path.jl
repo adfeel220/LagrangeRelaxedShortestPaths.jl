@@ -348,8 +348,7 @@ function lagrange_relaxed_shortest_path(
 
             # Test all termination criteria
             is_terminate, terminate_message = ready_to_terminate(
-                vertex_conflicts,
-                edge_conflicts,
+                num_conflicts,
                 upper_bound,
                 lower_bound,
                 absolute_optimality_threshold,
@@ -359,13 +358,14 @@ function lagrange_relaxed_shortest_path(
             )
 
             if is_terminate
+                astar_scores = compute_scores(paths, edge_costs)
+                a_star_total_score = sum(astar_scores)
+
                 if !silent
                     print("\r" * " "^previous_printing_length * "\r")
                     @info terminate_message
+                    @info "Comparing A* score $a_star_total_score and PP score $upper_bound"
                 end
-
-                astar_scores = compute_scores(paths, edge_costs)
-                a_star_total_score = sum(astar_scores)
 
                 # Return result from prioritized planning if
                 # 1. parallel A* does not have a feasible solution yet
