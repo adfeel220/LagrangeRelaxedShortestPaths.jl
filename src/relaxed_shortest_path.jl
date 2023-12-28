@@ -213,10 +213,11 @@ function lagrange_relaxed_shortest_path(
     multi_threads::Bool=true,
     pp_frequency::Union{Integer,AbstractFloat}=1,
     random_shuffle_priority::Bool=false,
-    # Optimization Parameters 
+    # Optimization Parameters
     optimizer::AbstractOptimizer{C}=AdamOptimizer(),
     perturbation::C=zero(C),
     rng_seed=nothing,
+    gradient_bias::C=1.0,
     # Termination Criteria / Computation Budget
     astar_max_iter::Int=typemax(Int),
     lagrange_max_iter::Int=typemax(Int),
@@ -405,6 +406,7 @@ function lagrange_relaxed_shortest_path(
                 vertex_occupancy,
                 edge_occupancy,
                 length(source_vertices);
+                gradient_bias,
                 perturbation,
                 rng,
             )

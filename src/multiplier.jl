@@ -37,6 +37,7 @@ function compute_gradient(
     num_agents::Int;
     perturbation=0.0,
     rng=default_rng(),
+    bias=1.0,
 ) where {C,T,V,A}
     vertex_grad = empty(vertex_multiplier; default=zero(C))
     edge_grad = empty(edge_multiplier; default=zero(C))
@@ -63,7 +64,7 @@ function compute_gradient(
     for (idx, val) in vertex_multiplier
         (idx in vertex_visited_instances) && continue
         vertex_grad[idx] =
-            -rand_perturbation(one(C) / (num_agents - one(C)), perturbation; rng)
+            -bias * rand_perturbation(one(C) / (num_agents - one(C)), perturbation; rng)
     end
 
     # edge conflicts
@@ -84,7 +85,7 @@ function compute_gradient(
     for (idx, val) in edge_multiplier
         (idx in edge_visited_instances) && continue
         edge_grad[idx] =
-            -rand_perturbation(one(C) / (num_agents - one(C)), perturbation; rng)
+            -bias * rand_perturbation(one(C) / (num_agents - one(C)), perturbation; rng)
     end
 
     return vertex_grad, edge_grad
@@ -174,6 +175,7 @@ function update_multiplier!(
     vertex_occupancy::VertexConflicts{T,V,A},
     edge_occupancy::EdgeConflicts{T,V,A},
     num_agents::Int;
+    gradient_bias=1.0,
     perturbation=0.0,
     rng=default_rng(),
 ) where {C,T,V,A}
@@ -183,6 +185,7 @@ function update_multiplier!(
         vertex_occupancy,
         edge_occupancy,
         num_agents;
+        bias=gradient_bias,
         perturbation,
         rng,
     )
