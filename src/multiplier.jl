@@ -55,7 +55,7 @@ function compute_gradient(
         end
 
         # Multiple agents occupies this vertex, update 
-        violation = (length(agents) - one(C)) / (num_agents - one(C))
+        violation = (length(agents) - one(C))
         vertex_grad[timestamp, vertex] = rand_perturbation(violation, perturbation; rng)
         push!(vertex_visited_instances, (timestamp, vertex))
     end
@@ -64,7 +64,7 @@ function compute_gradient(
     for (idx, val) in vertex_multiplier
         (idx in vertex_visited_instances) && continue
         vertex_grad[idx] =
-            -bias * rand_perturbation(one(C) / (num_agents - one(C)), perturbation; rng)
+            -bias * rand_perturbation(one(C), perturbation; rng)
     end
 
     # edge conflicts
@@ -76,7 +76,7 @@ function compute_gradient(
             continue
         end
 
-        violation = (length(agents) - one(C)) / (num_agents - one(C))
+        violation = (length(agents) - one(C))
         edge_grad[timestamp, from_v, to_v] = rand_perturbation(violation, perturbation; rng)
         push!(edge_visited_instances, (timestamp, from_v, to_v))
     end
@@ -85,7 +85,7 @@ function compute_gradient(
     for (idx, val) in edge_multiplier
         (idx in edge_visited_instances) && continue
         edge_grad[idx] =
-            -bias * rand_perturbation(one(C) / (num_agents - one(C)), perturbation; rng)
+            -bias * rand_perturbation(one(C), perturbation; rng)
     end
 
     return vertex_grad, edge_grad
@@ -144,6 +144,20 @@ function compute_nonnegative_gradient(
 end
 
 """
+    normalize_vector(grad)
+Normalize a dynamic dimension array by dividing each element by its norm
+"""
+function normalize_vector!(grad::AbstractDynamicDimensionArray{C}) where {C}
+    length(grad) == 0 && return grad
+
+    grad_length = sum(val^2 for (idx, val) in grad)
+    for (idx, val) in grad
+        grad[idx] /= grad_length
+    end
+    return grad
+end
+
+"""
     update_multiplier!(
         vertex_multiplier, edge_multiplier, vertex_optimizer, edge_optimizer,
         vertex_occupancy, edge_occupancy; perturbation, rng
@@ -189,6 +203,8 @@ function update_multiplier!(
         perturbation,
         rng,
     )
+    normalize_vector!(vertex_grad)
+    normalize_vector!(edge_grad)
     step!(vertex_multiplier, vertex_optimizer, vertex_grad)
     step!(edge_multiplier, edge_optimizer, edge_grad)
 
