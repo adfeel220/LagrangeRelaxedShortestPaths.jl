@@ -13,7 +13,7 @@ export AbstractDynamicDimensionArray,
     DynamicDimensionArray, DynamicDimensionArray2to4, DynamicDimensionGridArray
 export shortest_paths, astar, temporal_astar, dijkstra, prioritized_planning
 export detect_vertex_conflict, detect_edge_conflict, is_feasible
-export lagrange_relaxed_shortest_path
+export lagrange_relaxed_shortest_path, vertex_path_split
 export AdamOptimizer, SimpleGradientOptimizer, DecayGradientOptimizer
 export MapfConfig
 

@@ -45,58 +45,83 @@ end
 """
     ready_to_terminate(
         vertex_conflict, edge_conflicts, upper_bound, lower_bound, min_edge_cost, exploration_status;
-        optimality_threshold, max_exploration_time, silent
+        optimality_threshold, max_exploration_time
     )
-Test termination criteria and return `true` if one of the condition is met.
+Test termination criteria and return `true` and message if one of the condition is met.
 """
 function ready_to_terminate(
     vertex_conflicts::VertexConflicts{T,V,A},
     edge_conflicts::EdgeConflicts{T,V,A},
     upper_bound::C,
     lower_bound::C,
-    min_edge_cost::C,
+    absolute_optimality_threshold::C,
     exploration_status::S;
-    optimality_threshold::C=0.0,
+    relative_optimality_threshold::C=0.0,
     max_exploration_time::S,
-    silent::Bool=true,
 ) where {T,V,A,C,S<:Union{Integer,AbstractFloat}}
     # Criteria 1: conflict free
     if is_conflict_free(vertex_conflicts) && is_conflict_free(edge_conflicts)
-        if !silent
-            println("")
-            @info "Terminate upon finding a conflict free solution"
-        end
-        return true
+        return true, "Terminate upon finding a conflict free solution"
     end
 
-    # Criteria 2: absolute optimality gap smaller than minimum edge cost
-    if (upper_bound - lower_bound) < min_edge_cost
-        if !silent
-            println("")
-            @info "Terminate upon optimality gap smaller than minimum edge cost $min_edge_cost"
-        end
-        return true
+    # Criteria 2: absolute optimality gap smaller than threshold
+    if (upper_bound - lower_bound) < absolute_optimality_threshold
+        return true,
+        "Terminate upon optimality gap smaller than absolute gap threshold $absolute_optimality_threshold"
     end
 
     suboptimality = (upper_bound - lower_bound) / lower_bound
     # Criteria 3: relative optimaligy gap smaller than a threshold
-    if suboptimality <= optimality_threshold
-        if !silent
-            println("")
-            @info "Terminate upon reaching optimality gap ≤ $optimality_threshold"
-        end
-        return true
+    if suboptimality <= relative_optimality_threshold
+        return true,
+        "Terminate upon reaching optimality gap ≤ $relative_optimality_threshold"
     end
 
     # Criteria 4: optimality have not improved for a long time
     if is_time_for_next_event(max_exploration_time, exploration_status)
-        if !silent
-            println("")
-            unit = isa(max_exploration_time, Integer) ? "iterations" : "seconds"
-            @info "Terminate since no improvement has been made over $max_exploration_time $unit"
-        end
-        return true
+        unit = isa(max_exploration_time, Integer) ? "iterations" : "seconds"
+        return true,
+        "Terminate since no improvement has been made over $max_exploration_time $unit"
     end
 
-    return false
+    return false, ""
+end
+
+"""
+    time_with_unit(time_s; digits)
+Return a `String` with human friendly readable format with input time in the unit of seconds.
+If a number is larger than 1.0, returns `day-hour-minute-second` format;
+If a number is smaller than 1.0, returns `ms`, `μs`, `ns`, etc.
+"""
+function time_with_unit(time_s::AbstractFloat; digits=3)::String
+    if time_s >= 1.0
+        units = ["d" => 86400.0, "h" => 3600.0, "m" => 60.0]
+
+        unallocated_time = time_s
+        time_with_unit = ""
+        for (u, mul) in units
+            if unallocated_time >= mul
+                high_unit_number = round(Int, div(unallocated_time, mul))
+                unallocated_time %= mul
+                time_with_unit *= "$high_unit_number$u"
+            end
+        end
+
+        time_with_unit *= "$(round(unallocated_time; digits=digits))s"
+
+        return time_with_unit
+
+    else
+        units = [
+            "m" => 1e-3, "μ" => 1e-6, "n" => 1e-9, "p" => 1e-12, "f" => 1e-15, "a" => 1e-18
+        ]
+
+        for (u, mul) in units
+            if time_s >= mul
+                return "$(round(time_s / mul; digits=digits))$(u)s"
+            end
+        end
+
+        return "$(round(time_s * 1e18; digits=digits))as"
+    end
 end

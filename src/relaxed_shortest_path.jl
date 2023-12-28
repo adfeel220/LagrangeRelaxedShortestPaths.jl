@@ -65,7 +65,7 @@ function update_cost!(
         if val ≈ 0.0
             delete!(cost, idx)
         else
-            cost[idx...] = origin_cost[idx...] + val
+            cost[idx] = origin_cost[idx] + val
         end
     end
 
@@ -185,7 +185,8 @@ modified based on Lagrange relaxation.
 - `astar_max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 - `lagrange_max_iter::Int`: maximum iteration number of Lagrange optimization step, by default `typemax(Int)`
 - `hard_timeout::Float64`: maximum physical time duration (in seconds) allowed for the program, by default `Inf`
-- `optimality_threshold`: tolerant relative suboptimality, program terminates when (UB - LB) / LB ≤ threshold, by default `1e-3`
+- `absolute_optimality_threshold`: absolute suboptimality tolerance, program terminates when (UB - LB) < threshold, by default `0`
+- `relative_optimality_threshold`: relative suboptimality tolerance, program terminates when (UB - LB) / LB ≤ threshold, by default `0`
 - `max_exploration_time::Union{Integer,AbstractFloat}`: maximum budget for exploration without any improvement in optimality, by default `Inf`
     Can be a `Integer`, then the program terminates if no improvement of optimality in `max_exploration_time` iterations;
 
@@ -214,13 +215,14 @@ function lagrange_relaxed_shortest_path(
     random_shuffle_priority::Bool=false,
     # Optimization Parameters 
     optimizer::AbstractOptimizer{C}=AdamOptimizer(),
-    perturbation=1e-3,
+    perturbation::C=zero(C),
     rng_seed=nothing,
     # Termination Criteria / Computation Budget
     astar_max_iter::Int=typemax(Int),
     lagrange_max_iter::Int=typemax(Int),
     hard_timeout::Float64=Inf,
-    optimality_threshold=1e-3,
+    absolute_optimality_threshold::C=zero(C),
+    relative_optimality_threshold::C=zero(C),
     max_exploration_time::Union{Integer,AbstractFloat}=Inf,
     # Status Display
     refresh_rate::Union{Integer,AbstractFloat}=0.25,
@@ -236,6 +238,10 @@ function lagrange_relaxed_shortest_path(
     ##############
     # Initialize #
     ##############
+    if !silent
+        @info "Initializing program"
+    end
+
     vertex_multiplier::A = empty(edge_costs; default=zero(C))
     edge_multiplier::A = empty(edge_costs; default=zero(C))
 
@@ -245,30 +251,57 @@ function lagrange_relaxed_shortest_path(
 
     cost::A = deepcopy(edge_costs)  # modified cost
 
-    vertex_conflicts = VertexConflicts{Int,Int,Int}()
-    edge_conflicts = EdgeConflicts{Int,Int,Int}()
-
     rng = isnothing(rng_seed) ? Xoshiro() : Xoshiro(rng_seed)
 
     # Tracking program status
-    suboptimality = typemax(C)
     exploration_status = init_status(max_exploration_time)
     pp_run_status = init_status(pp_frequency)
-    num_conflicts = 0
     last_status_printed_time = time()  # time where last time status is printed
     iter = zero(Int)  # number of iteration for the entire program
     previous_printing_length = 0  # for clean printing status
 
-    min_edge_cost =
-        length(edge_costs) > 0 ? minimum(x -> x.second, edge_costs) : edge_costs.default
-
     # Prepare heuristic for every agent
+    !silent && @info "Resolving A* heuristics"
+
     heuristics = [
         resolve_heuristic(heuristic, network, target_v, edge_costs) for
         target_v in target_vertices
     ]
 
+    # Simple lower bound as parallel shortest path with the original cost
+    !silent && @info "Precompute parallel A* for lower bound estimation"
+
+    paths, scores = shortest_paths(
+        network,
+        edge_costs,
+        source_vertices,
+        target_vertices,
+        departure_times;
+        heuristics=heuristics,
+        max_iter=astar_max_iter,
+        multi_threads,
+    )
+
+    !silent && @info "Obtain initial lower bound = $(sum(scores))"
+
+    vertex_occupancy = detect_vertex_occupancy(paths)
+    edge_occupancy = detect_edge_occupancy(paths; swap=swap_conflict)
+    vertex_conflicts = detect_conflict(vertex_occupancy)
+    edge_conflicts = detect_conflict(edge_occupancy)
+
+    # Early termination if precomputation is already the best
+    if is_conflict_free(vertex_conflicts) && is_conflict_free(edge_conflicts)
+        if !silent
+            println("")
+            @info "Optimal solution found without any conflict, " *
+                "return total score of $(sum(scores)) with parallel A*"
+        end
+        return paths, scores
+    end
+
     # Simple upper bound as plain prioritized planning score
+    !silent && @info "Precompute prioritized planning for upper bound estimation"
+
     best_pp_path, best_pp_scores = prioritized_planning(
         network,
         edge_costs,
@@ -280,20 +313,14 @@ function lagrange_relaxed_shortest_path(
         heuristic,
         max_iter=astar_max_iter,
     )
-    # Simple lower bound as parallel shortest path with the original cost
-    paths, scores = shortest_paths(
-        network,
-        edge_costs,
-        source_vertices,
-        target_vertices,
-        departure_times;
-        heuristics=heuristics,
-        max_iter=astar_max_iter,
-        multi_threads,
-    )
+
     lower_bound = sum(scores)
     upper_bound = sum(best_pp_scores)
     relaxed_score = lower_bound
+    num_conflicts = n_conflicts(vertex_conflicts) + n_conflicts(edge_conflicts)
+    suboptimality = (upper_bound - lower_bound) / lower_bound
+
+    !silent && @info "Obtain initial upper bound = $upper_bound"
 
     #############
     # Main Loop #
@@ -308,9 +335,9 @@ function lagrange_relaxed_shortest_path(
             # Show status
             if !silent &&
                 is_time_for_next_event(refresh_rate, iter, last_status_printed_time)
-                print("\r" * " "^previous_printing_length)
+                print("\r" * " "^previous_printing_length * "\r")
                 print_info =
-                    "\rIter = $iter ($(round(time() - global_timer; digits=2)) s): " *
+                    "Iter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
                     "≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
                     "in $(round(lower_bound; digits=5))($relaxed_score) - $(round(upper_bound; digits=3)) " *
                     "with $num_conflicts conflicts"
@@ -318,6 +345,69 @@ function lagrange_relaxed_shortest_path(
                 previous_printing_length = length(print_info)
                 last_status_printed_time = time()
             end
+
+            # Test all termination criteria
+            is_terminate, terminate_message = ready_to_terminate(
+                vertex_conflicts,
+                edge_conflicts,
+                upper_bound,
+                lower_bound,
+                absolute_optimality_threshold,
+                exploration_status;
+                relative_optimality_threshold,
+                max_exploration_time,
+            )
+
+            if is_terminate
+                if !silent
+                    print("\r" * " "^previous_printing_length * "\r")
+                    @info terminate_message
+                end
+
+                astar_scores = compute_scores(paths, edge_costs)
+                a_star_total_score = sum(astar_scores)
+
+                # Return result from prioritized planning if
+                # 1. parallel A* does not have a feasible solution yet
+                # 2. parallel A* has a feasible solution but worst than PP
+                if num_conflicts > 0 || upper_bound < a_star_total_score
+                    if !silent
+                        println(
+                            "Iter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
+                            "≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
+                            "in $(round(lower_bound; digits=3)) - $(round(upper_bound; digits=3))",
+                        )
+                        @info "Return with total score of $(upper_bound) using prioritized planning"
+                    end
+                    return best_pp_path, best_pp_scores
+
+                    # Return parallel A* solution
+                else
+                    suboptimality = max(a_star_total_score - lower_bound) / lower_bound
+                    if !silent
+                        println(
+                            "Iter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
+                            "≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
+                            "in $(round(lower_bound; digits=3)) - $(round(upper_bound; digits=3))",
+                        )
+                        @info "Return with total score of $(sum(a_star_total_score)) using relaxed A*"
+                    end
+                    return paths, astar_scores
+                end
+            end
+
+            # Update multipliers to compute modified costs
+            update_multiplier!(
+                vertex_multiplier,
+                edge_multiplier,
+                vertex_optimizer,
+                edge_optimizer,
+                vertex_occupancy,
+                edge_occupancy,
+                length(source_vertices);
+                perturbation,
+                rng,
+            )
 
             # Update the modified cost from original cost
             update_cost!(cost, edge_costs, vertex_multiplier, edge_multiplier, network)
@@ -352,7 +442,7 @@ function lagrange_relaxed_shortest_path(
             end
 
             # Parallel A* to obtain the current Lagrange relaxation result
-            paths, _ = shortest_paths(
+            paths, scores = shortest_paths(
                 network,
                 cost,
                 source_vertices,
@@ -388,63 +478,6 @@ function lagrange_relaxed_shortest_path(
             num_conflicts = n_conflicts(vertex_conflicts) + n_conflicts(edge_conflicts)
             suboptimality = (upper_bound - lower_bound) / lower_bound
 
-            # Test all termination criteria
-            is_terminate = ready_to_terminate(
-                vertex_conflicts,
-                edge_conflicts,
-                upper_bound,
-                lower_bound,
-                min_edge_cost,
-                exploration_status;
-                optimality_threshold,
-                max_exploration_time,
-                silent,
-            )
-
-            if is_terminate
-                astar_scores = compute_scores(paths, edge_costs)
-                a_star_total_score = sum(astar_scores)
-
-                # Return result from prioritized planning if
-                # 1. parallel A* does not have a feasible solution yet
-                # 2. parallel A* has a feasible solution but worst than PP
-                if num_conflicts > 0 || upper_bound < a_star_total_score
-                    if !silent
-                        println(
-                            "\rIter = $iter: ≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
-                            "in $(round(lower_bound; digits=3)) - $(round(upper_bound; digits=3))",
-                        )
-                        @info "At total score of $(upper_bound) using prioritized planning"
-                    end
-                    return best_pp_path, best_pp_scores
-
-                    # Return parallel A* solution
-                else
-                    suboptimality = max(a_star_total_score - lower_bound) / lower_bound
-                    if !silent
-                        println(
-                            "\rIter = $iter: ≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
-                            "in $(round(lower_bound; digits=3)) - $(round(upper_bound; digits=3))",
-                        )
-                        @info "At total score of $(sum(a_star_total_score)) using relaxed A*"
-                    end
-                    return paths, astar_scores
-                end
-            end
-
-            update_multiplier!(
-                vertex_multiplier,
-                edge_multiplier,
-                vertex_optimizer,
-                edge_optimizer,
-                vertex_occupancy,
-                edge_occupancy,
-                length(source_vertices);
-                perturbation,
-                rng,
-            )
-
-            # Update status
             iter += 1
             exploration_status = next_status(exploration_status)
             pp_run_status = next_status(pp_run_status)
@@ -456,7 +489,8 @@ function lagrange_relaxed_shortest_path(
     # Meaningful solution hasn't been reach during the main loop, return the best known result at the moment
     if !silent
         println("")
-        @info "Timeout after $iter iterations with ≤$(round(suboptimality*1e2; digits=3))% suboptimal solution, " *
+        @info "Timeout after $iter iterations ($(time_with_unit(time() - global_timer; digits=2))) " *
+            "with ≤$(round(suboptimality*1e2; digits=3))% suboptimal solution, " *
             "return result from prioritized planning with score $(sum(best_pp_scores))"
     end
     return best_pp_path, best_pp_scores

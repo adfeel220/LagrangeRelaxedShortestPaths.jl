@@ -75,7 +75,7 @@ function prioritized_planning(
     @assert length(unique(priority)) == length(priority) "No duplicated element is allowed in prioritized planning, got $priority"
 
     paths = Vector{Vector{Tuple{T,V}}}(undef, length(sources))
-    costs = zeros(C, length(sources))
+    costs = fill(typemax(C), length(sources))
     reserved_vertices = Set{Tuple{T,V}}()
     reserved_edges = Set{Tuple{T,V,V}}()
 

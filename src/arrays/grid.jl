@@ -3,13 +3,15 @@
     DynamicDimensionGridArray{T}
 A dimension free array in which overindexing is allowed. No out of bound error for this array.
 An special optimized version that is based on a grid and has index only 2-4.
+The default value between two vertices are the euclidean distance between two vertices multiplied
+by default value. The value is no smaller than the minimal value.
 
 Implemented for fast searching and single entity modification, not suitable for vectorized computation
 The indexing of this array follows the rules below:
 1. If exact match of index exists, return the index
 2. No exact match exists, try to find a shorter index. e.g. if right alignment, try to index `arr[1,2,3]`
 while `arr[1,2,3]` doesn't exist but `arr[2,3]` exists, return `arr[2,3]`
-3. If non of the degenerated indices exists, return the default value.
+3. If non of the degenerated indices exists, return the default euclidean distance.
 """
 mutable struct DynamicDimensionGridArray{T} <: AbstractDynamicDimensionArray{T}
     d2::AVLTree{DimensionFreeData{T,2}}
@@ -38,7 +40,7 @@ end
 Create an empty `DynamicDimensionGridArray` with a default value (`{Float64}(1.0)` if not specified).
 """
 function DynamicDimensionGridArray(
-    size::NTuple{2,Int}; default::T=one(Float64), min_val::T=0.1 * default
+    size::NTuple{2,Int}; default::T=one(Float64), min_val::T=default
 ) where {T}
     t2 = AVLTree{DimensionFreeData{T,2}}()
     t3 = AVLTree{DimensionFreeData{T,3}}()
@@ -64,35 +66,52 @@ function euclidean_distance(arr::DynamicDimensionGridArray, v1::Int, v2::Int)
     return √sum((coord1 .- coord2) .^ 2)
 end
 
-function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,4}) where {T}
+"""
+    getindex(DynamicDimensionGridArray, index...)
+Efficient implementation of dynamic indexing by explicitly giving the size of index
+utilizing multiple dispatching
+"""
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::NTuple{4,Int}) where {T}
     data = find_data(arr.d4, index)
     if !isnothing(data)
         return data
     end
-    return arr[degenerate_tuple(index)...]
+    return arr[degenerate_tuple(index)]
+end
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,4}) where {T}
+    return Base.getindex(arr, index)
 end
 
-function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,3}) where {T}
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::NTuple{3,Int}) where {T}
     data = find_data(arr.d3, index)
     if !isnothing(data)
         return data
     end
-    return arr[degenerate_tuple(index)...]
+    return arr[degenerate_tuple(index)]
+end
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,3}) where {T}
+    return Base.getindex(arr, index)
 end
 
-function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,2}) where {T}
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::NTuple{2,Int}) where {T}
     data = find_data(arr.d2, index)
     if !isnothing(data)
         return data
     end
-    return arr.default
+    return max(arr.min_val, arr.default * euclidean_distance(arr, index[1], index[2]))
+end
+function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,2}) where {T}
+    return Base.getindex(arr, index)
 end
 
 function Base.getindex(arr::DynamicDimensionGridArray{T}, index...) where {T}
-    return arr.default
+    return max(
+        arr.min_val, arr.default * euclidean_distance(arr, index[end - 1], index[end - 2])
+    )
 end
+
 function Base.setindex!(
-    arr::DynamicDimensionGridArray{T}, value::T, index::Vararg{Int,N}
+    arr::DynamicDimensionGridArray{T}, value::T, index::NTuple{N,Int}
 ) where {T,N}
     if N == 4
         set_data!(arr.d4, value, index)
@@ -103,7 +122,16 @@ function Base.setindex!(
     end
     return arr
 end
+function Base.setindex!(
+    arr::DynamicDimensionGridArray{T}, value::T, index::Vararg{Int,N}
+) where {T,N}
+    return Base.setindex!(arr, value, index)
+end
 
+"""
+    iterate(::DynamicDimensionGridArray)
+Traverse the underlying data storage trees
+"""
 function Base.iterate(arr::DynamicDimensionGridArray{T}, i::K=1) where {T,K<:Integer}
     if i > length(arr)
         return nothing
@@ -132,6 +160,10 @@ function empty(
     return DynamicDimensionGridArray(arr.grid_size; default=default, min_val=min_val)
 end
 
+"""
+    haskey(arr::DynamicDimensionGridArray, key::NTuple)
+Check if a key (index) is registered in the array
+"""
 function Base.haskey(arr::DynamicDimensionGridArray{T}, key::NTuple{N,T}) where {N,T}
     if N == 4
         return !isnothing(find_node(arr.d4, key))

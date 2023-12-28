@@ -312,7 +312,7 @@ function shortest_paths(
 
     # Multi-threaded solution
     if multi_threads
-        paths = Vector{Vector{Tuple{T,V}}}(undef, length(sources))
+        paths = Vector{TimedPath{T,V}}(undef, length(sources))
         costs = zeros(C, length(sources))
 
         Base.Threads.@threads for ag in 1:length(sources)

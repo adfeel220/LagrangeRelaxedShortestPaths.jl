@@ -59,19 +59,19 @@ function step!(
 
     # Iterate a DynamicDimensionArray only returns non-default values
     for (idx, grad_val) in grad
-        adam.m[idx...] = adam.β1 * adam.m[idx...] + (1 - adam.β1) * grad_val
-        adam.v[idx...] = adam.β2 * adam.v[idx...] + (1 - adam.β2) * grad_val^2
+        adam.m[idx] = adam.β1 * adam.m[idx] + (1 - adam.β1) * grad_val
+        adam.v[idx] = adam.β2 * adam.v[idx] + (1 - adam.β2) * grad_val^2
 
-        corrected_m = adam.m[idx...] / (1 - adam.β1_t)
-        corrected_v = adam.v[idx...] / (1 - adam.β2_t)
+        corrected_m = adam.m[idx] / (1 - adam.β1_t)
+        corrected_v = adam.v[idx] / (1 - adam.β2_t)
 
         # plus sign because of gradient ascend
-        update_val = param[idx...] + adam.α * corrected_m / (√corrected_v + adam.ϵ)
+        update_val = param[idx] + adam.α * corrected_m / (√corrected_v + adam.ϵ)
 
         if update_val <= zero(T)
-            param[idx...] = zero(T)
+            param[idx] = zero(T)
         else
-            param[idx...] = update_val
+            param[idx] = update_val
         end
     end
 
@@ -100,12 +100,12 @@ function step!(
     param::A, opt::SimpleGradientOptimizer{T}, grad::A
 ) where {T,A<:AbstractDynamicDimensionArray{T}}
     for (idx, grad_val) in grad
-        update_val = param[idx...] + opt.α * grad_val
+        update_val = param[idx] + opt.α * grad_val
 
         if update_val <= zero(T)
-            param[idx...] = zero(T)
+            param[idx] = zero(T)
         else
-            param[idx...] = update_val
+            param[idx] = update_val
         end
     end
     return param
@@ -138,11 +138,11 @@ function step!(
     param::A, opt::DecayGradientOptimizer{T}, grad::A
 ) where {T,A<:AbstractDynamicDimensionArray{T}}
     for (idx, grad_val) in grad
-        update_val = max(zero(T), param[idx...] + opt.α * grad_val)
+        update_val = max(zero(T), param[idx] + opt.α * grad_val)
         if update_val <= zero(T)
-            param[idx...] = zero(T)
+            param[idx] = zero(T)
         else
-            param[idx...] = update_val
+            param[idx] = update_val
         end
     end
     opt.α = max(opt.min_step_size, opt.α * opt.decay_rate)
