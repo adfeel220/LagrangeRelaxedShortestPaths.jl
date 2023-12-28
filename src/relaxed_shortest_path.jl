@@ -185,7 +185,8 @@ modified based on Lagrange relaxation.
 - `astar_max_iter::Int`: maximum iteration of individual A*, by default `typemax(Int)`
 - `lagrange_max_iter::Int`: maximum iteration number of Lagrange optimization step, by default `typemax(Int)`
 - `hard_timeout::Float64`: maximum physical time duration (in seconds) allowed for the program, by default `Inf`
-- `optimality_threshold`: tolerant relative suboptimality, program terminates when (UB - LB) / LB ≤ threshold, by default `1e-3`
+- `absolute_optimality_threshold`: absolute suboptimality tolerance, program terminates when (UB - LB) < threshold, by default `0`
+- `relative_optimality_threshold`: relative suboptimality tolerance, program terminates when (UB - LB) / LB ≤ threshold, by default `0`
 - `max_exploration_time::Union{Integer,AbstractFloat}`: maximum budget for exploration without any improvement in optimality, by default `Inf`
     Can be a `Integer`, then the program terminates if no improvement of optimality in `max_exploration_time` iterations;
 
@@ -214,13 +215,14 @@ function lagrange_relaxed_shortest_path(
     random_shuffle_priority::Bool=false,
     # Optimization Parameters 
     optimizer::AbstractOptimizer{C}=AdamOptimizer(),
-    perturbation=1e-3,
+    perturbation::C=zero(C),
     rng_seed=nothing,
     # Termination Criteria / Computation Budget
     astar_max_iter::Int=typemax(Int),
     lagrange_max_iter::Int=typemax(Int),
     hard_timeout::Float64=Inf,
-    optimality_threshold=1e-3,
+    absolute_optimality_threshold::C=zero(C),
+    relative_optimality_threshold::C=zero(C),
     max_exploration_time::Union{Integer,AbstractFloat}=Inf,
     # Status Display
     refresh_rate::Union{Integer,AbstractFloat}=0.25,
@@ -257,9 +259,6 @@ function lagrange_relaxed_shortest_path(
     last_status_printed_time = time()  # time where last time status is printed
     iter = zero(Int)  # number of iteration for the entire program
     previous_printing_length = 0  # for clean printing status
-
-    min_edge_cost =
-        length(edge_costs) > 0 ? minimum(x -> x.second, edge_costs) : edge_costs.default
 
     # Prepare heuristic for every agent
     !silent && @info "Resolving A* heuristics"
@@ -336,9 +335,9 @@ function lagrange_relaxed_shortest_path(
             # Show status
             if !silent &&
                 is_time_for_next_event(refresh_rate, iter, last_status_printed_time)
-                print("\r" * " "^previous_printing_length)
+                print("\r" * " "^previous_printing_length * "\r")
                 print_info =
-                    "\rIter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
+                    "Iter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
                     "≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
                     "in $(round(lower_bound; digits=5))($relaxed_score) - $(round(upper_bound; digits=3)) " *
                     "with $num_conflicts conflicts"
@@ -348,19 +347,23 @@ function lagrange_relaxed_shortest_path(
             end
 
             # Test all termination criteria
-            is_terminate = ready_to_terminate(
+            is_terminate, terminate_message = ready_to_terminate(
                 vertex_conflicts,
                 edge_conflicts,
                 upper_bound,
                 lower_bound,
-                min_edge_cost,
+                absolute_optimality_threshold,
                 exploration_status;
-                optimality_threshold,
+                relative_optimality_threshold,
                 max_exploration_time,
-                silent,
             )
 
             if is_terminate
+                if !silent
+                    print("\r" * " "^previous_printing_length * "\r")
+                    @info terminate_message
+                end
+
                 astar_scores = compute_scores(paths, edge_costs)
                 a_star_total_score = sum(astar_scores)
 
@@ -370,7 +373,7 @@ function lagrange_relaxed_shortest_path(
                 if num_conflicts > 0 || upper_bound < a_star_total_score
                     if !silent
                         println(
-                            "\rIter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
+                            "Iter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
                             "≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
                             "in $(round(lower_bound; digits=3)) - $(round(upper_bound; digits=3))",
                         )
@@ -383,7 +386,7 @@ function lagrange_relaxed_shortest_path(
                     suboptimality = max(a_star_total_score - lower_bound) / lower_bound
                     if !silent
                         println(
-                            "\rIter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
+                            "Iter = $iter ($(time_with_unit(time() - global_timer; digits=2))): " *
                             "≤$(round(suboptimality*1e2; digits=3))% suboptimal " *
                             "in $(round(lower_bound; digits=3)) - $(round(upper_bound; digits=3))",
                         )

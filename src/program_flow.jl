@@ -45,60 +45,46 @@ end
 """
     ready_to_terminate(
         vertex_conflict, edge_conflicts, upper_bound, lower_bound, min_edge_cost, exploration_status;
-        optimality_threshold, max_exploration_time, silent
+        optimality_threshold, max_exploration_time
     )
-Test termination criteria and return `true` if one of the condition is met.
+Test termination criteria and return `true` and message if one of the condition is met.
 """
 function ready_to_terminate(
     vertex_conflicts::VertexConflicts{T,V,A},
     edge_conflicts::EdgeConflicts{T,V,A},
     upper_bound::C,
     lower_bound::C,
-    min_edge_cost::C,
+    absolute_optimality_threshold::C,
     exploration_status::S;
-    optimality_threshold::C=0.0,
+    relative_optimality_threshold::C=0.0,
     max_exploration_time::S,
-    silent::Bool=true,
 ) where {T,V,A,C,S<:Union{Integer,AbstractFloat}}
     # Criteria 1: conflict free
     if is_conflict_free(vertex_conflicts) && is_conflict_free(edge_conflicts)
-        if !silent
-            println("")
-            @info "Terminate upon finding a conflict free solution"
-        end
-        return true
+        return true, "Terminate upon finding a conflict free solution"
     end
 
-    # Criteria 2: absolute optimality gap smaller than minimum edge cost
-    if (upper_bound - lower_bound) < min_edge_cost
-        if !silent
-            println("")
-            @info "Terminate upon optimality gap smaller than minimum edge cost $min_edge_cost"
-        end
-        return true
+    # Criteria 2: absolute optimality gap smaller than threshold
+    if (upper_bound - lower_bound) < absolute_optimality_threshold
+        return true,
+        "Terminate upon optimality gap smaller than absolute gap threshold $absolute_optimality_threshold"
     end
 
     suboptimality = (upper_bound - lower_bound) / lower_bound
     # Criteria 3: relative optimaligy gap smaller than a threshold
-    if suboptimality <= optimality_threshold
-        if !silent
-            println("")
-            @info "Terminate upon reaching optimality gap ≤ $optimality_threshold"
-        end
-        return true
+    if suboptimality <= relative_optimality_threshold
+        return true,
+        "Terminate upon reaching optimality gap ≤ $relative_optimality_threshold"
     end
 
     # Criteria 4: optimality have not improved for a long time
     if is_time_for_next_event(max_exploration_time, exploration_status)
-        if !silent
-            println("")
-            unit = isa(max_exploration_time, Integer) ? "iterations" : "seconds"
-            @info "Terminate since no improvement has been made over $max_exploration_time $unit"
-        end
-        return true
+        unit = isa(max_exploration_time, Integer) ? "iterations" : "seconds"
+        return true,
+        "Terminate since no improvement has been made over $max_exploration_time $unit"
     end
 
-    return false
+    return false, ""
 end
 
 """

@@ -105,7 +105,9 @@ function Base.getindex(arr::DynamicDimensionGridArray{T}, index::Vararg{Int,2}) 
 end
 
 function Base.getindex(arr::DynamicDimensionGridArray{T}, index...) where {T}
-    return max(arr.min_val, arr.default * euclidean_distance(arr, index[end-1], index[end-2]))
+    return max(
+        arr.min_val, arr.default * euclidean_distance(arr, index[end - 1], index[end - 2])
+    )
 end
 
 function Base.setindex!(
