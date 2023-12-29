@@ -9,6 +9,11 @@ Compute the modified cost based on the Lagrange multiplier
 - `vertex_multiplier::AbstractDynamicDimensionArray`: Lagrange multiplier about vertex conflicts, indexed by (time, to-v)
 - `edge_multiplier::AbstractDynamicDimensionArray`: Lagrange multiplier about edge conflicts, indexed by (time, from-v, to-v)
 - `network::AbstractGraph`: network where the agent travels on, used to retrieve `inneighbors`
+- `num_agents::Int`: number of agents
+
+# Keyword arguments
+- `perturbation`: ratio of perturbation for each agent's cost update, by default `0.0`
+- `rng`: random generator, by default `default_rng()`
 """
 function update_cost!(
     cost::CA,
@@ -16,6 +21,9 @@ function update_cost!(
     vertex_multiplier::CA,
     edge_multiplier::CA,
     network::AbstractGraph,
+    num_agents::Int;
+    perturbation=0.0,
+    rng=default_rng(),
 ) where {CA<:AbstractDynamicDimensionArray}
     # Store all the values need to be updated
     update_vals = Dict{NTuple{3,Int},Float64}()
@@ -63,9 +71,14 @@ function update_cost!(
         # delete if value is empty, reduce to original cost
         # without using extra memory
         if val ≈ 0.0
-            delete!(cost, idx)
+            for a in 1:num_agents
+                delete!(cost, (a, idx...))
+            end
         else
-            cost[idx] = origin_cost[idx] + val
+            for a in 1:num_agents
+                cost[a, idx...] =
+                    origin_cost[idx] + rand_perturbation(val, perturbation; rng)
+            end
         end
     end
 
@@ -178,7 +191,8 @@ modified based on Lagrange relaxation.
 
 ## Optimization Parameters
 - `optimizer::AbstractOptimizer`: optimizer for gradient ascend of Lagrange multiplier, by default is `AdamOptimizer()`
-- `perturbation`: ratio of random perturbation for Lagrange multiplier update, by default `1e-3` (update value in ratio 1±0.001)
+- `gradient_perturbation`: ratio of random perturbation for Lagrange multiplier update, by default `0`
+- `cost_perturbation`: ratio of random perturbation for modified cost across each agent, by default `0`
 - `rng_seed`: random seed for all randomness of program, generate random numbers by `Xoshiro` generator, by default `nothing`
 
 ## Termination Criteria / Computation Budget
@@ -215,7 +229,8 @@ function lagrange_relaxed_shortest_path(
     random_shuffle_priority::Bool=false,
     # Optimization Parameters
     optimizer::AbstractOptimizer{C}=AdamOptimizer(),
-    perturbation::C=zero(C),
+    gradient_perturbation::C=zero(C),
+    cost_perturbation::C=zero(C),
     rng_seed=nothing,
     gradient_bias::C=1.0,
     # Termination Criteria / Computation Budget
@@ -405,15 +420,23 @@ function lagrange_relaxed_shortest_path(
                 vertex_optimizer,
                 edge_optimizer,
                 vertex_occupancy,
-                edge_occupancy,
-                length(source_vertices);
+                edge_occupancy;
                 gradient_bias,
-                perturbation,
+                perturbation=gradient_perturbation,
                 rng,
             )
 
             # Update the modified cost from original cost
-            update_cost!(cost, edge_costs, vertex_multiplier, edge_multiplier, network)
+            update_cost!(
+                cost,
+                edge_costs,
+                vertex_multiplier,
+                edge_multiplier,
+                network,
+                length(source_vertices);
+                perturbation=cost_perturbation,
+                rng,
+            )
 
             # Run prioritized planning for upper bound every once in a while
             if is_time_for_next_event(pp_frequency, pp_run_status)
