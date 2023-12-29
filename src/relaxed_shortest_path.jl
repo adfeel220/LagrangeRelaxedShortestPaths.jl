@@ -1,6 +1,9 @@
 
 """
-    update_cost!(cost, origin_cost, vertex_multiplier, edge_multiplier, network)
+    update_cost!(
+        cost, origin_cost, vertex_multiplier, edge_multiplier, network, num_agents;
+        perturbation, rng
+    )
 Compute the modified cost based on the Lagrange multiplier
 
 # Arguments
@@ -71,13 +74,27 @@ function update_cost!(
         # delete if value is empty, reduce to original cost
         # without using extra memory
         if val ≈ 0.0
-            for a in 1:num_agents
-                delete!(cost, (a, idx...))
+            # If no perturbation, degenerate into 3 index
+            if perturbation ≈ 0.0
+                delete!(cost, idx)
+            else
+                # Has perturbation, delete each agent differently
+                for a in 1:num_agents
+                    t, v1, v2 = idx
+                    delete!(cost, (a, t, v1, v2))
+                end
             end
         else
-            for a in 1:num_agents
-                cost[a, idx...] =
-                    origin_cost[idx] + rand_perturbation(val, perturbation; rng)
+            # If no perturbation, degenerate into 3 index
+            if perturbation ≈ 0.0
+                cost[idx] = origin_cost[idx] + val
+            else
+                # Has perturbation, distribute to each agent differently
+                for a in 1:num_agents
+                    t, v1, v2 = idx
+                    cost[a, t, v1, v2] =
+                        origin_cost[idx] + rand_perturbation(val, perturbation; rng)
+                end
             end
         end
     end
