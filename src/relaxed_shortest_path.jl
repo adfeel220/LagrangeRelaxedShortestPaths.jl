@@ -1,6 +1,9 @@
 
 """
-    update_cost!(cost, origin_cost, vertex_multiplier, edge_multiplier, network)
+    update_cost!(
+        cost, origin_cost, vertex_multiplier, edge_multiplier, network, num_agents;
+        perturbation, rng
+    )
 Compute the modified cost based on the Lagrange multiplier
 
 # Arguments
@@ -9,6 +12,11 @@ Compute the modified cost based on the Lagrange multiplier
 - `vertex_multiplier::AbstractDynamicDimensionArray`: Lagrange multiplier about vertex conflicts, indexed by (time, to-v)
 - `edge_multiplier::AbstractDynamicDimensionArray`: Lagrange multiplier about edge conflicts, indexed by (time, from-v, to-v)
 - `network::AbstractGraph`: network where the agent travels on, used to retrieve `inneighbors`
+- `num_agents::Int`: number of agents
+
+# Keyword arguments
+- `perturbation`: ratio of perturbation for each agent's cost update, by default `0.0`
+- `rng`: random generator, by default `default_rng()`
 """
 function update_cost!(
     cost::CA,
@@ -16,6 +24,9 @@ function update_cost!(
     vertex_multiplier::CA,
     edge_multiplier::CA,
     network::AbstractGraph,
+    num_agents::Int;
+    perturbation=0.0,
+    rng=default_rng(),
 ) where {CA<:AbstractDynamicDimensionArray}
     # Store all the values need to be updated
     update_vals = Dict{NTuple{3,Int},Float64}()
@@ -63,9 +74,28 @@ function update_cost!(
         # delete if value is empty, reduce to original cost
         # without using extra memory
         if val ≈ 0.0
-            delete!(cost, idx)
+            # If no perturbation, degenerate into 3 index
+            if perturbation ≈ 0.0
+                delete!(cost, idx)
+            else
+                # Has perturbation, delete each agent differently
+                for a in 1:num_agents
+                    t, v1, v2 = idx
+                    delete!(cost, (a, t, v1, v2))
+                end
+            end
         else
-            cost[idx] = origin_cost[idx] + val
+            # If no perturbation, degenerate into 3 index
+            if perturbation ≈ 0.0
+                cost[idx] = origin_cost[idx] + val
+            else
+                # Has perturbation, distribute to each agent differently
+                for a in 1:num_agents
+                    t, v1, v2 = idx
+                    cost[a, t, v1, v2] =
+                        origin_cost[idx] + rand_perturbation(val, perturbation; rng)
+                end
+            end
         end
     end
 
@@ -178,7 +208,8 @@ modified based on Lagrange relaxation.
 
 ## Optimization Parameters
 - `optimizer::AbstractOptimizer`: optimizer for gradient ascend of Lagrange multiplier, by default is `AdamOptimizer()`
-- `perturbation`: ratio of random perturbation for Lagrange multiplier update, by default `1e-3` (update value in ratio 1±0.001)
+- `gradient_perturbation`: ratio of random perturbation for Lagrange multiplier update, by default `0`
+- `cost_perturbation`: ratio of random perturbation for modified cost across each agent, by default `0`
 - `rng_seed`: random seed for all randomness of program, generate random numbers by `Xoshiro` generator, by default `nothing`
 
 ## Termination Criteria / Computation Budget
@@ -213,10 +244,12 @@ function lagrange_relaxed_shortest_path(
     multi_threads::Bool=true,
     pp_frequency::Union{Integer,AbstractFloat}=1,
     random_shuffle_priority::Bool=false,
-    # Optimization Parameters 
+    # Optimization Parameters
     optimizer::AbstractOptimizer{C}=AdamOptimizer(),
-    perturbation::C=zero(C),
+    gradient_perturbation::C=zero(C),
+    cost_perturbation::C=zero(C),
     rng_seed=nothing,
+    gradient_bias::C=1.0,
     # Termination Criteria / Computation Budget
     astar_max_iter::Int=typemax(Int),
     lagrange_max_iter::Int=typemax(Int),
@@ -321,6 +354,7 @@ function lagrange_relaxed_shortest_path(
     suboptimality = (upper_bound - lower_bound) / lower_bound
 
     !silent && @info "Obtain initial upper bound = $upper_bound"
+    !silent && @info "Start searching with $num_conflicts conflicts"
 
     #############
     # Main Loop #
@@ -348,8 +382,7 @@ function lagrange_relaxed_shortest_path(
 
             # Test all termination criteria
             is_terminate, terminate_message = ready_to_terminate(
-                vertex_conflicts,
-                edge_conflicts,
+                num_conflicts,
                 upper_bound,
                 lower_bound,
                 absolute_optimality_threshold,
@@ -359,13 +392,14 @@ function lagrange_relaxed_shortest_path(
             )
 
             if is_terminate
+                astar_scores = compute_scores(paths, edge_costs)
+                a_star_total_score = sum(astar_scores)
+
                 if !silent
                     print("\r" * " "^previous_printing_length * "\r")
                     @info terminate_message
+                    @info "Comparing A* score $a_star_total_score and PP score $upper_bound"
                 end
-
-                astar_scores = compute_scores(paths, edge_costs)
-                a_star_total_score = sum(astar_scores)
 
                 # Return result from prioritized planning if
                 # 1. parallel A* does not have a feasible solution yet
@@ -403,14 +437,23 @@ function lagrange_relaxed_shortest_path(
                 vertex_optimizer,
                 edge_optimizer,
                 vertex_occupancy,
-                edge_occupancy,
-                length(source_vertices);
-                perturbation,
+                edge_occupancy;
+                gradient_bias,
+                perturbation=gradient_perturbation,
                 rng,
             )
 
             # Update the modified cost from original cost
-            update_cost!(cost, edge_costs, vertex_multiplier, edge_multiplier, network)
+            update_cost!(
+                cost,
+                edge_costs,
+                vertex_multiplier,
+                edge_multiplier,
+                network,
+                length(source_vertices);
+                perturbation=cost_perturbation,
+                rng,
+            )
 
             # Run prioritized planning for upper bound every once in a while
             if is_time_for_next_event(pp_frequency, pp_run_status)

@@ -60,7 +60,9 @@ end
     euclidean_distance(arr, v1, v2)
 Compute the euclidean distance between `v1` and `v2` on the grid of `arr`, measured by number of blocks
 """
-function euclidean_distance(arr::DynamicDimensionGridArray, v1::Int, v2::Int)
+function euclidean_distance(
+    arr::DynamicDimensionGridArray{T}, v1::Int, v2::Int
+)::T where {T}
     coord1 = vertex_to_coordinate(arr, v1)
     coord2 = vertex_to_coordinate(arr, v2)
     return √sum((coord1 .- coord2) .^ 2)

@@ -33,10 +33,10 @@ function compute_gradient(
     vertex_multiplier::AbstractDynamicDimensionArray{C},
     edge_multiplier::AbstractDynamicDimensionArray{C},
     vertex_occupancy::VertexConflicts{T,V,A},
-    edge_occupancy::EdgeConflicts{T,V,A},
-    num_agents::Int;
+    edge_occupancy::EdgeConflicts{T,V,A};
     perturbation=0.0,
     rng=default_rng(),
+    bias=1.0,
 ) where {C,T,V,A}
     vertex_grad = empty(vertex_multiplier; default=zero(C))
     edge_grad = empty(edge_multiplier; default=zero(C))
@@ -54,7 +54,7 @@ function compute_gradient(
         end
 
         # Multiple agents occupies this vertex, update 
-        violation = (length(agents) - one(C)) / (num_agents - one(C))
+        violation = (length(agents) - one(C))
         vertex_grad[timestamp, vertex] = rand_perturbation(violation, perturbation; rng)
         push!(vertex_visited_instances, (timestamp, vertex))
     end
@@ -62,8 +62,7 @@ function compute_gradient(
     # Decrease the multipliers that no agent touches
     for (idx, val) in vertex_multiplier
         (idx in vertex_visited_instances) && continue
-        vertex_grad[idx] =
-            -rand_perturbation(one(C) / (num_agents - one(C)), perturbation; rng)
+        vertex_grad[idx] = -bias * rand_perturbation(one(C), perturbation; rng)
     end
 
     # edge conflicts
@@ -75,7 +74,7 @@ function compute_gradient(
             continue
         end
 
-        violation = (length(agents) - one(C)) / (num_agents - one(C))
+        violation = (length(agents) - one(C))
         edge_grad[timestamp, from_v, to_v] = rand_perturbation(violation, perturbation; rng)
         push!(edge_visited_instances, (timestamp, from_v, to_v))
     end
@@ -83,8 +82,7 @@ function compute_gradient(
     # Decrease the multipliers that no agent touches
     for (idx, val) in edge_multiplier
         (idx in edge_visited_instances) && continue
-        edge_grad[idx] =
-            -rand_perturbation(one(C) / (num_agents - one(C)), perturbation; rng)
+        edge_grad[idx] = -bias * rand_perturbation(one(C), perturbation; rng)
     end
 
     return vertex_grad, edge_grad
@@ -143,6 +141,22 @@ function compute_nonnegative_gradient(
 end
 
 """
+    normalize_vector(grad)
+Normalize a dynamic dimension array by dividing each element by its norm
+"""
+function normalize_vector!(grad::AbstractDynamicDimensionArray{C}) where {C}
+    length(grad) == 0 && return grad
+
+    grad_length = sum(val^2 for (idx, val) in grad)
+    grad_length ≈ zero(C) && return grad
+
+    for (idx, val) in grad
+        grad[idx] /= grad_length
+    end
+    return grad
+end
+
+"""
     update_multiplier!(
         vertex_multiplier, edge_multiplier, vertex_optimizer, edge_optimizer,
         vertex_occupancy, edge_occupancy; perturbation, rng
@@ -160,9 +174,11 @@ with type of cost `C`, indexed by (time, vertex)
 vertex `V`, agent `A`
 - `edge_occupancy::EdgeConflicts{T,V,A}`: occupancy table of edges with type of time `T`,
 vertex `V`, agent `A`
-- `num_agents::Int`: Number of agents in the network, for normalizing gradient size
 
 # Keyword arguments
+- `gradient_bias`: weight bias for negative gradients.
+`>1` penalizes more unnecessary multiplier value but suffers local optimal;
+`<1` allows more redundant multiplier value but converges slower.
 - `perturbation`: ratio of perturbation (± percentage), by default `0.0`
 - `rng`: random generator, by default `default_rng()`
 """
@@ -172,8 +188,8 @@ function update_multiplier!(
     vertex_optimizer::AbstractOptimizer{C},
     edge_optimizer::AbstractOptimizer{C},
     vertex_occupancy::VertexConflicts{T,V,A},
-    edge_occupancy::EdgeConflicts{T,V,A},
-    num_agents::Int;
+    edge_occupancy::EdgeConflicts{T,V,A};
+    gradient_bias=1.0,
     perturbation=0.0,
     rng=default_rng(),
 ) where {C,T,V,A}
@@ -181,11 +197,13 @@ function update_multiplier!(
         vertex_multiplier,
         edge_multiplier,
         vertex_occupancy,
-        edge_occupancy,
-        num_agents;
+        edge_occupancy;
+        bias=gradient_bias,
         perturbation,
         rng,
     )
+    normalize_vector!(vertex_grad)
+    normalize_vector!(edge_grad)
     step!(vertex_multiplier, vertex_optimizer, vertex_grad)
     step!(edge_multiplier, edge_optimizer, edge_grad)
 
@@ -224,6 +242,7 @@ function update_nondecreasing_multiplier!(
     vertex_occupancy::VertexConflicts{T,V,A},
     edge_occupancy::EdgeConflicts{T,V,A},
     num_agents::Int;
+    gradient_bias=1.0,
     perturbation=0.0,
     rng=default_rng(),
 ) where {C,T,V,A}
@@ -236,6 +255,10 @@ function update_nondecreasing_multiplier!(
         perturbation,
         rng,
     )
+
+    normalize_vector!(vertex_grad)
+    normalize_vector!(edge_grad)
+
     step!(vertex_multiplier, vertex_optimizer, vertex_grad)
     step!(edge_multiplier, edge_optimizer, edge_grad)
 
