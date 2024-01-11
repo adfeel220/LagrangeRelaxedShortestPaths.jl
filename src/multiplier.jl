@@ -62,8 +62,7 @@ function compute_gradient(
     # Decrease the multipliers that no agent touches
     for (idx, val) in vertex_multiplier
         (idx in vertex_visited_instances) && continue
-        vertex_grad[idx] =
-            -bias * rand_perturbation(one(C), perturbation; rng)
+        vertex_grad[idx] = -bias * rand_perturbation(one(C), perturbation; rng)
     end
 
     # edge conflicts
@@ -83,8 +82,7 @@ function compute_gradient(
     # Decrease the multipliers that no agent touches
     for (idx, val) in edge_multiplier
         (idx in edge_visited_instances) && continue
-        edge_grad[idx] =
-            -bias * rand_perturbation(one(C), perturbation; rng)
+        edge_grad[idx] = -bias * rand_perturbation(one(C), perturbation; rng)
     end
 
     return vertex_grad, edge_grad
