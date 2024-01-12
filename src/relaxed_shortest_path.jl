@@ -230,6 +230,10 @@ modified based on Lagrange relaxation.
     Can be a `Float`, then the status is printed every `refresh_rate` seconds.
 
 - `silent::Bool`: disable printing status on the console, by default `true`
+- `record_vars`: returns the value of local variables stored in this collection of symbols upon returning.
+For example, `[:lower_bound]` records the lower bound at the point of return, by default an empty symbol vector.
+- `track_vars`: tracks the value of local variables stored in this collection of symbols at each iteration.
+For example, `[:suboptimality]` records the suboptimality at each iteration, by default an empty symbol vector.
 """
 function lagrange_relaxed_shortest_path(
     network::AbstractGraph,
@@ -260,6 +264,8 @@ function lagrange_relaxed_shortest_path(
     # Status Display
     refresh_rate::Union{Integer,AbstractFloat}=0.25,
     silent::Bool=true,
+    record_vars=Symbol[],
+    track_vars=Symbol[],
 ) where {C,A<:AbstractDynamicDimensionArray{C}}
     @assert length(source_vertices) ==
         length(target_vertices) ==
@@ -292,6 +298,9 @@ function lagrange_relaxed_shortest_path(
     last_status_printed_time = time()  # time where last time status is printed
     iter = zero(Int)  # number of iteration for the entire program
     previous_printing_length = 0  # for clean printing status
+
+    # Information gathering
+    tracker = Dict([(var, Vector{Any}()) for var in track_vars])
 
     # Prepare heuristic for every agent
     !silent && @info "Resolving A* heuristics"
@@ -329,7 +338,11 @@ function lagrange_relaxed_shortest_path(
             @info "Optimal solution found without any conflict, " *
                 "return total score of $(sum(scores)) with parallel A*"
         end
-        return paths, scores
+
+        # Record return information
+        return_info = Dict(k => v for (k, v) in Base.@locals() if k in record_vars)
+
+        return paths, scores, return_info, tracker
     end
 
     # Simple upper bound as plain prioritized planning score
@@ -413,7 +426,13 @@ function lagrange_relaxed_shortest_path(
                         )
                         @info "Return with total score of $(upper_bound) using prioritized planning"
                     end
-                    return best_pp_path, best_pp_scores
+
+                    # Record return information
+                    return_info = Dict(
+                        k => v for (k, v) in Base.@locals() if k in record_vars
+                    )
+
+                    return best_pp_path, best_pp_scores, return_info, tracker
 
                     # Return parallel A* solution
                 else
@@ -426,7 +445,13 @@ function lagrange_relaxed_shortest_path(
                         )
                         @info "Return with total score of $(sum(a_star_total_score)) using relaxed A*"
                     end
-                    return paths, astar_scores
+
+                    # Record return information
+                    return_info = Dict(
+                        k => v for (k, v) in Base.@locals() if k in record_vars
+                    )
+
+                    return paths, astar_scores, return_info, tracker
                 end
             end
 
@@ -517,6 +542,13 @@ function lagrange_relaxed_shortest_path(
                 exploration_status = init_status(exploration_status)
             end
 
+            # Record info in tracker
+            for (k, v) in Base.@locals
+                if k in track_vars
+                    push!(tracker[k], v)
+                end
+            end
+
             # Update status
             num_conflicts = n_conflicts(vertex_conflicts) + n_conflicts(edge_conflicts)
             suboptimality = (upper_bound - lower_bound) / lower_bound
@@ -536,7 +568,11 @@ function lagrange_relaxed_shortest_path(
             "with ≤$(round(suboptimality*1e2; digits=3))% suboptimal solution, " *
             "return result from prioritized planning with score $(sum(best_pp_scores))"
     end
-    return best_pp_path, best_pp_scores
+
+    # Record return information
+    return_info = Dict(k => v for (k, v) in Base.@locals() if k in record_vars)
+
+    return best_pp_path, best_pp_scores, return_info, tracker
 end
 
 """

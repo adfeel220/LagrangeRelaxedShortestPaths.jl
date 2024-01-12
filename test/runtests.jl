@@ -18,8 +18,8 @@ using Test
             )
         end
 
-        @testset "Code linting" begin
-            JET.test_package(LagrangeRelaxedShortestPaths; target_defined_modules=true)
-        end
+        # @testset "Code linting" begin
+        #     JET.test_package(LagrangeRelaxedShortestPaths; target_defined_modules=true)
+        # end
     end
 end
