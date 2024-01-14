@@ -339,6 +339,13 @@ function lagrange_relaxed_shortest_path(
                 "return total score of $(sum(scores)) with parallel A*"
         end
 
+        # Able to return necessary information even if it finds answer early
+        lower_bound = sum(scores)
+        upper_bound = lower_bound
+        relaxed_score = lower_bound
+        num_conflicts = 0
+        suboptimality = 0.0
+
         # Record return information
         return_info = Dict(k => v for (k, v) in Base.@locals() if k in record_vars)
 
@@ -543,9 +550,11 @@ function lagrange_relaxed_shortest_path(
             end
 
             # Record info in tracker
-            for (k, v) in Base.@locals
-                if k in track_vars
-                    push!(tracker[k], v)
+            if length(track_vars) > 0
+                for (k, v) in Base.@locals
+                    if k in track_vars
+                        push!(tracker[k], v)
+                    end
                 end
             end
 
