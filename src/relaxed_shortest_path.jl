@@ -234,6 +234,7 @@ modified based on Lagrange relaxation.
 For example, `[:lower_bound]` records the lower bound at the point of return, by default an empty symbol vector.
 - `track_vars`: tracks the value of local variables stored in this collection of symbols at each iteration.
 For example, `[:suboptimality]` records the suboptimality at each iteration, by default an empty symbol vector.
+- `track_time_by_suboptimality`: track the number of iteration and time used to reach a certain level of optimality
 """
 function lagrange_relaxed_shortest_path(
     network::AbstractGraph,
@@ -266,6 +267,7 @@ function lagrange_relaxed_shortest_path(
     silent::Bool=true,
     record_vars=Symbol[],
     track_vars=Symbol[],
+    track_time_by_suboptimality=Float64[],
 ) where {C,A<:AbstractDynamicDimensionArray{C}}
     @assert length(source_vertices) ==
         length(target_vertices) ==
@@ -301,6 +303,10 @@ function lagrange_relaxed_shortest_path(
 
     # Information gathering
     tracker = Dict([(var, Vector{Any}()) for var in track_vars])
+    # Track time and iteration to reach a certain level of optimality
+    suboptimality_timing = Dict(
+        subopt => (0, Inf) for subopt in track_time_by_suboptimality
+    )
 
     # Prepare heuristic for every agent
     !silent && @info "Resolving A* heuristics"
@@ -348,8 +354,12 @@ function lagrange_relaxed_shortest_path(
 
         # Record return information
         return_info = Dict(k => v for (k, v) in Base.@locals() if k in record_vars)
+        time_used = time() - global_timer
+        for subopt in track_time_by_suboptimality
+            suboptimality_timing[subopt] = (0, time_used)
+        end
 
-        return paths, scores, return_info, tracker
+        return paths, scores, return_info, tracker, suboptimality_timing
     end
 
     # Simple upper bound as plain prioritized planning score
@@ -439,7 +449,7 @@ function lagrange_relaxed_shortest_path(
                         k => v for (k, v) in Base.@locals() if k in record_vars
                     )
 
-                    return best_pp_path, best_pp_scores, return_info, tracker
+                    return best_pp_path, best_pp_scores, return_info, tracker, suboptimality_timing
 
                     # Return parallel A* solution
                 else
@@ -458,7 +468,7 @@ function lagrange_relaxed_shortest_path(
                         k => v for (k, v) in Base.@locals() if k in record_vars
                     )
 
-                    return paths, astar_scores, return_info, tracker
+                    return paths, astar_scores, return_info, tracker, suboptimality_timing
                 end
             end
 
@@ -562,6 +572,13 @@ function lagrange_relaxed_shortest_path(
             num_conflicts = n_conflicts(vertex_conflicts) + n_conflicts(edge_conflicts)
             suboptimality = (upper_bound - lower_bound) / lower_bound
 
+            time_used = time() - global_timer
+            for subopt in track_time_by_suboptimality
+                if time_used < suboptimality_timing[subopt][2] && suboptimality <= subopt
+                    suboptimality_timing[subopt] = (iter, time_used)
+                end
+            end
+
             iter += 1
             exploration_status = next_status(exploration_status)
             pp_run_status = next_status(pp_run_status)
@@ -581,7 +598,7 @@ function lagrange_relaxed_shortest_path(
     # Record return information
     return_info = Dict(k => v for (k, v) in Base.@locals() if k in record_vars)
 
-    return best_pp_path, best_pp_scores, return_info, tracker
+    return best_pp_path, best_pp_scores, return_info, tracker, suboptimality_timing
 end
 
 """
