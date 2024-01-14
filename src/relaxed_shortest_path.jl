@@ -304,9 +304,7 @@ function lagrange_relaxed_shortest_path(
     # Information gathering
     tracker = Dict([(var, Vector{Any}()) for var in track_vars])
     # Track time and iteration to reach a certain level of optimality
-    suboptimality_timing = Dict(
-        subopt => (0, Inf) for subopt in track_time_by_suboptimality
-    )
+    suboptimality_timing = [(0, Inf) for subopt in track_time_by_suboptimality]
 
     # Prepare heuristic for every agent
     !silent && @info "Resolving A* heuristics"
@@ -355,8 +353,8 @@ function lagrange_relaxed_shortest_path(
         # Record return information
         return_info = Dict(k => v for (k, v) in Base.@locals() if k in record_vars)
         time_used = time() - global_timer
-        for subopt in track_time_by_suboptimality
-            suboptimality_timing[subopt] = (0, time_used)
+        for (idx, subopt) in enumerate(track_time_by_suboptimality)
+            suboptimality_timing[idx] = (0, time_used)
         end
 
         return paths, scores, return_info, tracker, suboptimality_timing
@@ -382,6 +380,14 @@ function lagrange_relaxed_shortest_path(
     relaxed_score = lower_bound
     num_conflicts = n_conflicts(vertex_conflicts) + n_conflicts(edge_conflicts)
     suboptimality = (upper_bound - lower_bound) / lower_bound
+
+    # Update tracker
+    time_used = time() - global_timer
+    for (idx, subopt) in enumerate(track_time_by_suboptimality)
+        if time_used < suboptimality_timing[idx][2] && suboptimality <= subopt
+            suboptimality_timing[idx] = (iter, time_used)
+        end
+    end
 
     !silent && @info "Obtain initial upper bound = $upper_bound"
     !silent && @info "Start searching with $num_conflicts conflicts"
@@ -449,7 +455,9 @@ function lagrange_relaxed_shortest_path(
                         k => v for (k, v) in Base.@locals() if k in record_vars
                     )
 
-                    return best_pp_path, best_pp_scores, return_info, tracker, suboptimality_timing
+                    return best_pp_path,
+                    best_pp_scores, return_info, tracker,
+                    suboptimality_timing
 
                     # Return parallel A* solution
                 else
@@ -573,9 +581,9 @@ function lagrange_relaxed_shortest_path(
             suboptimality = (upper_bound - lower_bound) / lower_bound
 
             time_used = time() - global_timer
-            for subopt in track_time_by_suboptimality
-                if time_used < suboptimality_timing[subopt][2] && suboptimality <= subopt
-                    suboptimality_timing[subopt] = (iter, time_used)
+            for (idx, subopt) in enumerate(track_time_by_suboptimality)
+                if time_used < suboptimality_timing[idx][2] && suboptimality <= subopt
+                    suboptimality_timing[idx] = (iter, time_used)
                 end
             end
 
