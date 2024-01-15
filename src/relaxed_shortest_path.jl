@@ -346,6 +346,7 @@ function lagrange_relaxed_shortest_path(
         # Able to return necessary information even if it finds answer early
         lower_bound = sum(scores)
         upper_bound = lower_bound
+        initial_pp_score = lower_bound
         relaxed_score = lower_bound
         num_conflicts = 0
         suboptimality = 0.0
@@ -375,8 +376,9 @@ function lagrange_relaxed_shortest_path(
         max_iter=astar_max_iter,
     )
 
+    initial_pp_score = sum(best_pp_scores)
     lower_bound = sum(scores)
-    upper_bound = sum(best_pp_scores)
+    upper_bound = initial_pp_score
     relaxed_score = lower_bound
     num_conflicts = n_conflicts(vertex_conflicts) + n_conflicts(edge_conflicts)
     suboptimality = (upper_bound - lower_bound) / lower_bound
