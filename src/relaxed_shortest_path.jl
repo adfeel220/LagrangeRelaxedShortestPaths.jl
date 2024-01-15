@@ -327,6 +327,7 @@ function lagrange_relaxed_shortest_path(
         max_iter=astar_max_iter,
         multi_threads,
     )
+    initial_astar_score = sum(scores)
 
     !silent && @info "Obtain initial lower bound = $(sum(scores))"
 
@@ -344,7 +345,7 @@ function lagrange_relaxed_shortest_path(
         end
 
         # Able to return necessary information even if it finds answer early
-        lower_bound = sum(scores)
+        lower_bound = initial_astar_score
         upper_bound = lower_bound
         initial_pp_score = lower_bound
         relaxed_score = lower_bound
@@ -377,7 +378,7 @@ function lagrange_relaxed_shortest_path(
     )
 
     initial_pp_score = sum(best_pp_scores)
-    lower_bound = sum(scores)
+    lower_bound = initial_astar_score
     upper_bound = initial_pp_score
     relaxed_score = lower_bound
     num_conflicts = n_conflicts(vertex_conflicts) + n_conflicts(edge_conflicts)
