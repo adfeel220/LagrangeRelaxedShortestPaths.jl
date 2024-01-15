@@ -14,7 +14,9 @@ Supports initialization with `@kwdef`, by default utilizes `DynamicDimensionArra
 """
 @kwdef mutable struct AdamOptimizer{T,A<:AbstractDynamicDimensionArray} <:
                       AbstractOptimizer{T}
-    α::T = 0.001  # step size
+    α::T = 0.001  # base step size
+    α_t::T = 0.001 # actual step size
+    β0::T = 0.99  # step size decay
     β1::T = 0.9   # decay parameter [0, 1)
     β2::T = 0.999 # decay parameter [0, 1)
 
@@ -25,8 +27,12 @@ Supports initialization with `@kwdef`, by default utilizes `DynamicDimensionArra
     v::A = DynamicDimensionArray2to4()   # 2nd order momentum
     ϵ::T = 1e-8  # smooth factor
 end
-function AdamOptimizer(step_size::T; kwargs...) where {T}
-    return AdamOptimizer{T,DynamicDimensionArray2to4{T}}(; α=step_size, kwargs...)
+function AdamOptimizer(
+    base_step_size::T, start_step_size::T=base_step_size, step_decay::T=0.99; kwargs...
+) where {T}
+    return AdamOptimizer{T,DynamicDimensionArray2to4{T}}(;
+        α=base_step_size, α_t=start_step_size, β0=step_decay, kwargs...
+    )
 end
 
 """
@@ -54,6 +60,7 @@ Update parameter in gradient ascend manner with Adam optimizer using a pre-compu
 function step!(
     param::A, adam::AdamOptimizer{T}, grad::A
 ) where {T,A<:AbstractDynamicDimensionArray{T}}
+    adam.α_t = max(adam.α, adam.α_t * adam.β0)
     adam.β1_t *= adam.β1
     adam.β2_t *= adam.β2
 
@@ -66,7 +73,7 @@ function step!(
         corrected_v = adam.v[idx] / (1 - adam.β2_t)
 
         # plus sign because of gradient ascend
-        update_val = param[idx] + adam.α * corrected_m / (√corrected_v + adam.ϵ)
+        update_val = param[idx] + adam.α_t * corrected_m / (√corrected_v + adam.ϵ)
 
         if update_val <= zero(T)
             param[idx] = zero(T)
