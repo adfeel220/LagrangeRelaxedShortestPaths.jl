@@ -595,7 +595,8 @@ function lagrange_relaxed_shortest_path(
             pp_run_status = next_status(pp_run_status)
         end
     catch e
-        @warn "Catching error \"$e\" in the main loop, return best solution found so far"
+        !isa(e, InterruptException) && throw(e)
+        @warn "Stop by user interruption, return best solution found so far."
     end
 
     # Meaningful solution hasn't been reach during the main loop, return the best known result at the moment
