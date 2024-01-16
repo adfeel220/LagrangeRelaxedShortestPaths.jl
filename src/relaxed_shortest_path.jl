@@ -118,6 +118,8 @@ function compute_scores(
     return [
         if isempty(agent_path)
             typemax(C)
+        elseif length(agent_path) == 1  # starting point == end point
+            zero(C)
         else
             sum(
                 edge_costs[ag, t2, v1, v2] for ((t1, v1), (t2, v2)) in
@@ -595,7 +597,7 @@ function lagrange_relaxed_shortest_path(
             pp_run_status = next_status(pp_run_status)
         end
     catch e
-        !isa(e, InterruptException) && throw(e)
+        isa(e, InterruptException) || throw(e)
         @warn "Stop by user interruption, return best solution found so far."
     end
 
