@@ -67,6 +67,8 @@ function prioritized_planning(
     swap_conflict::Bool=false,
     heuristic::Union{Symbol,Function}=:dijkstra,
     max_iter::Int=typemax(Int),
+    timeout::Float64=Inf,
+    silent::Bool=true,
 ) where {V,C,T<:Integer}
     @assert length(sources) ==
         length(targets) ==
@@ -79,8 +81,19 @@ function prioritized_planning(
     reserved_vertices = Set{Tuple{T,V}}()
     reserved_edges = Set{Tuple{T,V,V}}()
 
+    start_time = time()
+    previous_printing_length = 0
     # Run shortest paths one by one
-    for ag in priority
+    for (ag_idx, ag) in enumerate(priority)
+        (time() - start_time) > timeout && break
+
+        if !silent
+            print("\r" * " "^previous_printing_length * "\r")
+            print_info = "Computing shortest path of agent $ag of $ag_idx-th priority"
+            print(print_info)
+            previous_printing_length = length(print_info)
+        end
+
         sv = sources[ag]
         tv = targets[ag]
         dep_time = departure_times[ag]
@@ -110,6 +123,8 @@ function prioritized_planning(
             push!(reserved_edges, e)
         end
     end
+
+    silent || print("\n")
 
     return paths, costs
 end

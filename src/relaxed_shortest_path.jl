@@ -377,6 +377,7 @@ function lagrange_relaxed_shortest_path(
         swap_conflict,
         heuristic,
         max_iter=astar_max_iter,
+        timeout=hard_timeout,
     )
 
     initial_pp_score = sum(best_pp_scores)
